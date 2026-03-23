@@ -59,8 +59,8 @@
                     └───────────────────────┘
 ```
 
-**Frontend:** React 18 + TypeScript + Tailwind CSS — diseño responsive, polling cada 3s  
-**Backend:** PHP 8+ con API REST — Laravel o CodeIgniter  
+**Frontend:** Bootstrap, html, css — diseño responsive, polling cada 3s  
+**Backend:** PHP, django  — Laravel 
 **Base de datos:** MySQL 8.0 / MariaDB
 
 ---

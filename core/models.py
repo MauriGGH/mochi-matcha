@@ -8,8 +8,6 @@ from django.db import models
 class Empleado(models.Model):
     ROLES = [
         ('mesero', 'Mesero'),
-        ('cajero', 'Cajero'),
-        ('cocina', 'Cocina'),
         ('gerente', 'Gerente'),
         ('admin', 'Admin'),
     ]
