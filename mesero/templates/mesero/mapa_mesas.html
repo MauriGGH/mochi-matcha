@@ -1,0 +1,329 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+
+{% block title %}Mesas{% endblock %}
+{% block page_title %}Mapa de Mesas{% endblock %}
+
+{% block sidebar_nav %}
+<a href="{% url 'mesero:mesas' %}" class="active"><i class="bi bi-grid-fill"></i> Mesas</a>
+<a href="{% url 'mesero:pedidos_listos' %}">
+  <i class="bi bi-bell-fill"></i> Pedidos listos
+  {% if pedidos_listos_count > 0 %}
+  <span class="badge-alert">{{ pedidos_listos_count }}</span>
+  {% endif %}
+</a>
+<div class="nav-section-label">Acciones</div>
+<a href="{% url 'mesero:pedido_asistido' %}"><i class="bi bi-plus-circle"></i> Pedido asistido</a>
+{% endblock %}
+
+{% block topbar_actions %}
+<!-- Alert badges for pending requests -->
+{% if alertas_ayuda > 0 %}
+<button class="btn btn-sm btn-warning rounded-pill d-flex align-items-center gap-1"
+        onclick="window.location='{% url 'mesero:alertas' %}'">
+  <i class="bi bi-bell-fill"></i>
+  {{ alertas_ayuda }} ayuda{% if alertas_ayuda > 1 %}s{% endif %}
+</button>
+{% endif %}
+{% if alertas_cuenta > 0 %}
+<button class="btn btn-sm rounded-pill d-flex align-items-center gap-1"
+        style="background:var(--mm-gold-pale); color:var(--mm-gold); border:1.5px solid var(--mm-gold);"
+        onclick="window.location='{% url 'mesero:cuentas' %}'">
+  <i class="bi bi-receipt"></i>
+  {{ alertas_cuenta }} cuenta{% if alertas_cuenta > 1 %}s{% endif %}
+</button>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .filter-bar {
+    display: flex; gap: .5rem; margin-bottom: 1.25rem;
+    flex-wrap: wrap; align-items: center;
+  }
+  .filter-btn {
+    border: 1.5px solid var(--mm-border);
+    background: var(--mm-white); color: var(--mm-text-muted);
+    border-radius: var(--radius-pill); padding: .3rem .9rem;
+    font-size: .78rem; font-weight: 600; cursor: pointer;
+    transition: all .15s; text-decoration: none;
+    display: inline-flex; align-items: center; gap: .3rem;
+  }
+  .filter-btn:hover { border-color: var(--mm-green); color: var(--mm-green); }
+  .filter-btn.active { background: var(--mm-green); border-color: var(--mm-green); color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Legend + filter -->
+<div class="filter-bar">
+  <button class="filter-btn active" onclick="filterMesas('todas', this)">
+    <span class="mesa-dot" style="background:#999;"></span> Todas ({{ mesas|length }})
+  </button>
+  <button class="filter-btn" onclick="filterMesas('libre', this)">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-text-muted);"></span>
+    Libres
+  </button>
+  <button class="filter-btn" onclick="filterMesas('ocupada', this)">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-green);"></span>
+    Ocupadas
+  </button>
+  <button class="filter-btn" onclick="filterMesas('pagando', this)">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-gold);"></span>
+    Pagando
+  </button>
+  <button class="btn btn-sm btn-primary ms-auto rounded-pill px-3"
+          onclick="location.reload()">
+    <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+  </button>
+</div>
+
+<!-- Table Grid -->
+<div class="table-grid" id="mesaGrid">
+  {% for mesa in mesas %}
+  <div class="mesa-tile {{ mesa.estado }}"
+       data-estado="{{ mesa.estado }}"
+       onclick="openMesaPanel({{ mesa.id }}, '{{ mesa.numero_mesa }}', '{{ mesa.estado }}', '{{ mesa.pin_actual|default:'' }}')"
+       title="Mesa {{ mesa.numero_mesa }}{% if mesa.ubicacion %} · {{ mesa.ubicacion }}{% endif %}">
+
+    <div class="mesa-dot"></div>
+    <div class="mesa-num">{{ mesa.numero_mesa }}</div>
+    <div class="mesa-label">
+      {% if mesa.estado == 'libre' %}Libre
+      {% elif mesa.estado == 'ocupada' %}
+        {{ mesa.sesiones_activas_count }} persona{% if mesa.sesiones_activas_count != 1 %}s{% endif %}
+      {% elif mesa.estado == 'pagando' %}Pagando
+      {% endif %}
+    </div>
+    {% if mesa.tiene_pedidos_listos %}
+    <span style="position:absolute;bottom:.5rem;right:.5rem;font-size:.7rem;
+                 background:var(--mm-green);color:#fff;border-radius:var(--radius-pill);
+                 padding:.1rem .4rem;">✓ Listo</span>
+    {% endif %}
+  </div>
+  {% empty %}
+  <div class="col-span-full text-center py-5 text-muted-mm">
+    No hay mesas configuradas.
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ===== Mesa Detail Offcanvas ===== -->
+<div class="offcanvas offcanvas-end" style="width:380px;" tabindex="-1"
+     id="mesaPanel" aria-labelledby="mesaPanelLabel">
+  <div class="offcanvas-header border-bottom">
+    <h5 class="offcanvas-title fw-bold" id="mesaPanelLabel">Mesa <span id="panelMesaNum">—</span></h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+
+  <div class="offcanvas-body p-3" id="panelBody">
+    <div class="text-center py-4 text-muted-mm">
+      <div class="spinner-border spinner-border-sm"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Panel template (hidden, cloned by JS) -->
+<template id="panelTemplate">
+  <!-- PIN -->
+  <div class="mb-3">
+    <div class="d-flex align-items-center justify-content-between mb-1">
+      <span class="fw-semibold" style="font-size:.8rem; color:var(--mm-text-muted);">PIN DE MESA</span>
+      <button class="btn btn-link btn-sm p-0 text-muted-mm" onclick="togglePin(this)">
+        <i class="bi bi-eye-slash"></i>
+      </button>
+    </div>
+    <div class="mesa-panel-pin" id="pinDisplay" style="filter:blur(4px);" data-pin="">
+      ••••
+    </div>
+  </div>
+
+  <!-- Sessions -->
+  <div class="mb-3">
+    <span class="fw-semibold d-block mb-2" style="font-size:.8rem; color:var(--mm-text-muted);">
+      SESIONES ACTIVAS
+    </span>
+    <div id="sessionList"></div>
+  </div>
+
+  <!-- Active orders -->
+  <div class="mb-3">
+    <span class="fw-semibold d-block mb-2" style="font-size:.8rem; color:var(--mm-text-muted);">
+      PEDIDOS
+    </span>
+    <div id="orderList"></div>
+  </div>
+
+  <!-- Actions -->
+  <div class="d-grid gap-2 mt-3">
+    <button class="btn btn-primary py-2" onclick="pedidoAsistido()">
+      <i class="bi bi-plus-circle me-2"></i>Agregar pedido
+    </button>
+    <button class="btn btn-outline-primary py-2" id="btnProcesarPago" onclick="procesarPago()">
+      <i class="bi bi-credit-card me-2"></i>Procesar pago
+    </button>
+    <button class="btn btn-outline-danger py-2" onclick="cerrarMesa()">
+      <i class="bi bi-x-circle me-2"></i>Cerrar mesa
+    </button>
+  </div>
+</template>
+
+{% endblock %}
+
+
+{% block extra_scripts %}
+<script>
+const CSRF = getCsrf();
+let currentMesaId = null;
+
+function filterMesas(estado, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.mesa-tile').forEach(tile => {
+    tile.style.display = (estado === 'todas' || tile.dataset.estado === estado) ? '' : 'none';
+  });
+}
+
+function openMesaPanel(mesaId, num, estado, pin) {
+  currentMesaId = mesaId;
+  document.getElementById('panelMesaNum').textContent = num;
+  const panel = document.getElementById('mesaPanel');
+  new bootstrap.Offcanvas(panel).show();
+
+  // Load details via AJAX
+  fetch(`{% url 'mesero:detalle_mesa' 0 %}`.replace('0', mesaId))
+    .then(r => r.json())
+    .then(data => renderPanel(data, pin));
+}
+
+function renderPanel(data, pin) {
+  const body = document.getElementById('panelBody');
+  const tpl = document.getElementById('panelTemplate').content.cloneNode(true);
+
+  // PIN
+  const pinEl = tpl.getElementById('pinDisplay');
+  pinEl.dataset.pin = pin;
+  pinEl.textContent = pin || '––';
+
+  // Sessions
+  const sessEl = tpl.getElementById('sessionList');
+  if (data.sesiones?.length) {
+    sessEl.innerHTML = data.sesiones.map(s => `
+      <div class="d-flex align-items-center justify-content-between p-2 mb-1 rounded-2"
+           style="background:var(--mm-cream); font-size:.82rem;">
+        <div><i class="bi bi-person me-1 text-green"></i><strong>${s.alias}</strong></div>
+        <div class="d-flex gap-2 align-items-center">
+          <span class="badge rounded-pill ${s.estado === 'activa' ? 'bg-success' : 'bg-secondary'}">
+            ${s.estado}
+          </span>
+          <button class="btn btn-link btn-sm p-0 text-danger"
+                  onclick="cerrarSesion(${s.id})" title="Cerrar sesión">
+            <i class="bi bi-x"></i>
+          </button>
+        </div>
+      </div>`).join('');
+  } else {
+    sessEl.innerHTML = '<p class="text-muted-mm" style="font-size:.82rem;">Sin sesiones activas.</p>';
+  }
+
+  // Orders
+  const ordEl = tpl.getElementById('orderList');
+  if (data.pedidos?.length) {
+    ordEl.innerHTML = data.pedidos.map(p => `
+      <div class="d-flex align-items-center justify-content-between p-2 mb-1 rounded-2"
+           style="background:var(--mm-cream); font-size:.82rem;">
+        <div>
+          <strong>#${p.id}</strong>
+          <span class="text-muted-mm ms-1">${p.alias}</span>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <span class="order-status-badge status-${p.estado}">${p.estado_display}</span>
+          ${p.estado === 'listo' ? `<button class="btn btn-sm btn-success rounded-pill px-2 py-0"
+            style="font-size:.7rem;" onclick="marcarEntregado(${p.id})">Entregar</button>` : ''}
+        </div>
+      </div>`).join('');
+  } else {
+    ordEl.innerHTML = '<p class="text-muted-mm" style="font-size:.82rem;">Sin pedidos activos.</p>';
+  }
+
+  body.innerHTML = '';
+  body.appendChild(tpl);
+}
+
+function togglePin(btn) {
+  const pin = document.getElementById('pinDisplay');
+  if (pin.style.filter) {
+    pin.style.filter = '';
+    btn.innerHTML = '<i class="bi bi-eye"></i>';
+  } else {
+    pin.style.filter = 'blur(4px)';
+    pin.textContent = '••••';
+    btn.innerHTML = '<i class="bi bi-eye-slash"></i>';
+  }
+}
+
+function marcarEntregado(pedidoId) {
+  fetch('{% url "mesero:entregar_pedido" %}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ pedido_id: pedidoId })
+  }).then(r => r.json()).then(d => {
+    if (d.ok) { showToast('Pedido marcado como entregado', 'success'); openMesaPanel(currentMesaId); }
+    else showToast(d.error, 'error');
+  });
+}
+
+function cerrarSesion(sesionId) {
+  if (!confirm('¿Cerrar esta sesión?')) return;
+  fetch('{% url "mesero:cerrar_sesion" %}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ sesion_id: sesionId })
+  }).then(r => r.json()).then(d => {
+    if (d.ok) openMesaPanel(currentMesaId);
+    else showToast(d.error, 'error');
+  });
+}
+
+function cerrarMesa() {
+  if (!confirm('¿Cerrar la mesa? Se invalidará el PIN y se cerrarán todas las sesiones.')) return;
+  fetch('{% url "mesero:cerrar_mesa" %}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ mesa_id: currentMesaId })
+  }).then(r => r.json()).then(d => {
+    if (d.ok) { bootstrap.Offcanvas.getInstance(document.getElementById('mesaPanel')).hide(); location.reload(); }
+    else showToast(d.error, 'error');
+  });
+}
+
+function pedidoAsistido() {
+  window.location.href = `{% url 'mesero:pedido_asistido' %}?mesa=${currentMesaId}`;
+}
+function procesarPago() {
+  window.location.href = `{% url 'mesero:pago' %}?mesa=${currentMesaId}`;
+}
+
+// Auto-refresh table map every 10s
+setInterval(() => {
+  if (!document.getElementById('mesaPanel').classList.contains('show')) {
+    fetch('{% url "mesero:mesas_estado" %}')
+      .then(r => r.json())
+      .then(data => {
+        data.mesas?.forEach(m => {
+          const tile = document.querySelector(`.mesa-tile[onclick*="(${m.id},"]`);
+          if (tile) {
+            tile.className = `mesa-tile ${m.estado}`;
+            tile.dataset.estado = m.estado;
+          }
+        });
+        // update alert badges
+        if (data.alertas_ayuda > 0 || data.alertas_cuenta > 0) {
+          // reload topbar badges
+        }
+      });
+  }
+}, 10000);
+</script>
+{% endblock %}

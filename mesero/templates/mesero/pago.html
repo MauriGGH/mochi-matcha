@@ -1,0 +1,239 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+
+{% block title %}Procesar Pago{% endblock %}
+{% block page_title %}Procesar Pago · Mesa {{ mesa.numero_mesa }}{% endblock %}
+
+{% block sidebar_nav %}
+<a href="{% url 'mesero:mesas' %}"><i class="bi bi-arrow-left"></i> Volver a mesas</a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3" style="max-width:900px;">
+
+  <!-- Left: Account breakdown -->
+  <div class="col-12 col-lg-7">
+    <div class="card border-0">
+      <div class="card-header bg-white border-bottom py-2 px-3 d-flex justify-content-between align-items-center">
+        <span class="fw-bold" style="font-size:.875rem;">Detalle de cuenta · Mesa {{ mesa.numero_mesa }}</span>
+        <span class="badge rounded-pill" style="background:var(--mm-gold-pale); color:var(--mm-gold); font-size:.72rem;">
+          PIN: {{ mesa.pin_actual }}
+        </span>
+      </div>
+      <div class="card-body p-0">
+
+        {% for sesion in sesiones %}
+        <!-- Session block -->
+        <div class="border-bottom px-3 py-2">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="d-flex align-items-center gap-2">
+              <div class="avatar-circle" style="width:28px;height:28px;font-size:.75rem;">
+                {{ sesion.alias|first|upper }}
+              </div>
+              <span class="fw-semibold" style="font-size:.875rem;">{{ sesion.alias }}</span>
+              {% if sesion.estado == 'pagada' %}
+              <span class="badge rounded-pill bg-success" style="font-size:.65rem;">Pagado</span>
+              {% endif %}
+            </div>
+            <div class="form-check" style="margin:0;">
+              <input class="form-check-input" type="checkbox"
+                     name="sesiones_seleccionadas" value="{{ sesion.id }}"
+                     id="chk-sesion-{{ sesion.id }}"
+                     {% if sesion.estado != 'pagada' %}checked{% else %}disabled{% endif %}
+                     onchange="recalcular()">
+            </div>
+          </div>
+
+          {% for pedido in sesion.pedidos_activos %}
+          <div class="ms-4 mb-1">
+            {% for det in pedido.detalles.all %}
+            <div class="d-flex justify-content-between align-items-start py-1"
+                 style="font-size:.8rem; border-bottom:1px dashed var(--mm-border);">
+              <div>
+                <span class="fw-semibold">{{ det.cantidad }}× {{ det.producto.nombre }}</span>
+                {% if det.modificadores.all %}
+                <div class="text-muted-mm" style="font-size:.72rem;">
+                  {% for m in det.modificadores.all %}{{ m.opcion.nombre_opcion }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                </div>
+                {% endif %}
+                {% if det.notas %}<div class="text-muted-mm" style="font-size:.7rem;"><em>{{ det.notas }}</em></div>{% endif %}
+              </div>
+              <span class="fw-semibold ms-2">${{ det.subtotal_calculado }}</span>
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+
+          <div class="d-flex justify-content-between px-0 pt-1 ms-4"
+               style="font-size:.82rem; color:var(--mm-text-muted);">
+            <span>Subtotal {{ sesion.alias }}</span>
+            <span class="fw-bold sesion-subtotal" data-sesion="{{ sesion.id }}"
+                  data-amount="{{ sesion.total }}">
+              ${{ sesion.total }}
+            </span>
+          </div>
+        </div>
+        {% endfor %}
+
+        <!-- Mesa total -->
+        <div class="px-3 py-2">
+          <div class="d-flex justify-content-between mb-1" style="font-size:.85rem;">
+            <span class="text-muted-mm">Subtotal seleccionado</span>
+            <span id="subtotalDisplay" class="fw-semibold">$0.00</span>
+          </div>
+          <div class="d-flex justify-content-between mb-1" style="font-size:.85rem;">
+            <span class="text-muted-mm">Propina sugerida (10%)</span>
+            <span id="propinaDisplay" class="fw-semibold">$0.00</span>
+          </div>
+          <hr class="my-2">
+          <div class="d-flex justify-content-between" style="font-size:1.1rem;">
+            <span class="fw-bold">Total</span>
+            <span class="fw-bold" style="color:var(--mm-green);" id="totalDisplay">$0.00</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Payment method -->
+  <div class="col-12 col-lg-5">
+    <div class="card border-0">
+      <div class="card-header bg-white border-bottom py-2 px-3">
+        <span class="fw-bold" style="font-size:.875rem;">Método de pago</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{% url 'mesero:procesar_pago' %}" id="formPago">
+          {% csrf_token %}
+          <input type="hidden" name="mesa_id" value="{{ mesa.id }}">
+          <input type="hidden" name="sesiones_ids" id="sesionesIds">
+          <input type="hidden" name="total" id="totalHidden">
+
+          <!-- Payment method selector -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:.82rem;">Forma de pago</label>
+            <div class="row g-2">
+              {% for metodo in metodos_pago %}
+              <div class="col-4">
+                <input type="radio" class="btn-check" name="metodo_pago_id"
+                       id="metodo-{{ metodo.id }}" value="{{ metodo.id }}"
+                       {% if forloop.first %}checked{% endif %}
+                       onchange="updateMetodo('{{ metodo.descripcion }}')">
+                <label class="btn btn-outline-secondary w-100 py-2"
+                       style="font-size:.78rem; border-radius:var(--radius-sm);"
+                       for="metodo-{{ metodo.id }}">
+                  {% if 'efectivo' in metodo.descripcion|lower %}💵
+                  {% elif 'tarjeta' in metodo.descripcion|lower %}💳
+                  {% else %}💱{% endif %}
+                  <div class="mt-1">{{ metodo.descripcion }}</div>
+                </label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Cash received (shown for efectivo/mixto) -->
+          <div id="cashSection" class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:.82rem;">
+              Efectivo recibido
+            </label>
+            <div class="input-group">
+              <span class="input-group-text" style="background:var(--mm-cream); border-color:var(--mm-border);">$</span>
+              <input type="number" name="efectivo_recibido" id="efectivoRecibido"
+                     class="form-control" step="0.01" min="0" placeholder="0.00"
+                     oninput="calcularCambio()" style="border-color:var(--mm-border);">
+            </div>
+          </div>
+
+          <!-- Change display -->
+          <div id="cambioSection" class="mb-3 p-2 rounded-3 d-none"
+               style="background:var(--mm-green-pale); border:1.5px solid var(--mm-green);">
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="fw-semibold" style="font-size:.875rem; color:var(--mm-green-dark);">
+                Cambio a devolver
+              </span>
+              <span class="fw-bold" style="font-size:1.25rem; color:var(--mm-green);"
+                    id="cambioDisplay">$0.00</span>
+            </div>
+          </div>
+
+          <!-- Propina override -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold" style="font-size:.82rem;">
+              Propina <span class="text-muted-mm fw-normal">(opcional)</span>
+            </label>
+            <div class="input-group">
+              <span class="input-group-text" style="background:var(--mm-cream); border-color:var(--mm-border);">$</span>
+              <input type="number" name="propina" id="propinaInput"
+                     class="form-control" step="0.01" min="0" placeholder="0.00"
+                     style="border-color:var(--mm-border);">
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 py-3" style="font-size:1rem;"
+                  onclick="prepareSubmit()" id="btnProcesar">
+            <i class="bi bi-check2-circle me-2"></i>Confirmar pago
+          </button>
+          <a href="{% url 'mesero:mesas' %}" class="btn btn-link w-100 mt-2 text-muted-mm">
+            Cancelar
+          </a>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function getSelectedSesiones() {
+  return [...document.querySelectorAll('input[name="sesiones_seleccionadas"]:checked:not(:disabled)')]
+    .map(c => c.value);
+}
+
+function recalcular() {
+  const selected = getSelectedSesiones();
+  let total = 0;
+  selected.forEach(id => {
+    const el = document.querySelector(`.sesion-subtotal[data-sesion="${id}"]`);
+    if (el) total += parseFloat(el.dataset.amount || 0);
+  });
+
+  const propina = total * 0.10;
+  document.getElementById('subtotalDisplay').textContent = `$${total.toFixed(2)}`;
+  document.getElementById('propinaDisplay').textContent  = `$${propina.toFixed(2)}`;
+  document.getElementById('totalDisplay').textContent    = `$${total.toFixed(2)}`;
+  document.getElementById('totalHidden').value           = total.toFixed(2);
+  document.getElementById('propinaInput').placeholder    = propina.toFixed(2);
+
+  calcularCambio();
+}
+
+function calcularCambio() {
+  const total    = parseFloat(document.getElementById('totalHidden').value || 0);
+  const recibido = parseFloat(document.getElementById('efectivoRecibido').value || 0);
+  const cambioSection = document.getElementById('cambioSection');
+  if (recibido > 0 && recibido >= total) {
+    const cambio = recibido - total;
+    document.getElementById('cambioDisplay').textContent = `$${cambio.toFixed(2)}`;
+    cambioSection.classList.remove('d-none');
+  } else {
+    cambioSection.classList.add('d-none');
+  }
+}
+
+function updateMetodo(desc) {
+  const cashSection = document.getElementById('cashSection');
+  const lower = desc.toLowerCase();
+  cashSection.style.display = (lower.includes('tarjeta')) ? 'none' : '';
+}
+
+function prepareSubmit() {
+  document.getElementById('sesionesIds').value = getSelectedSesiones().join(',');
+}
+
+// Init
+recalcular();
+</script>
+{% endblock %}
