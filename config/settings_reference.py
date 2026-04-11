@@ -1,6 +1,9 @@
 
 
 # ── Modelo de usuario personalizado ─────────────────────────────────────
+from mochimatcha2.config.settings import BASE_DIR
+
+
 AUTH_USER_MODEL = "accounts.Empleado"
 
 # ── Apps instaladas ──────────────────────────────────────────────────────
