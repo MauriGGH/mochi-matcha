@@ -1,0 +1,177 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+
+{% block title %}Configuración{% endblock %}
+{% block page_title %}Configuración{% endblock %}
+
+{% block sidebar_nav %}
+<a href="{% url 'gerente:floor_plan' %}"><i class="bi bi-grid-fill"></i> Floor Plan</a>
+<div class="nav-section-label">Gestión de Menú</div>
+<a href="{% url 'gerente:productos' %}"><i class="bi bi-basket-fill"></i> Productos</a>
+<a href="{% url 'gerente:categorias' %}"><i class="bi bi-tags-fill"></i> Categorías</a>
+<a href="{% url 'gerente:modificadores' %}"><i class="bi bi-sliders"></i> Modificadores</a>
+<a href="{% url 'gerente:promociones' %}"><i class="bi bi-percent"></i> Promociones</a>
+<a href="{% url 'gerente:mesas_crud' %}"><i class="bi bi-table"></i> Mesas</a>
+<div class="nav-section-label">Gestión</div>
+<a href="{% url 'gerente:empleados' %}"><i class="bi bi-people-fill"></i> Empleados</a>
+<div class="nav-section-label">Reportes</div>
+<a href="{% url 'gerente:reportes' %}"><i class="bi bi-bar-chart-fill"></i> Reportes</a>
+<a href="{% url 'gerente:auditoria' %}"><i class="bi bi-shield-check"></i> Auditoría</a>
+<div class="nav-section-label">Sistema</div>
+<a href="{% url 'gerente:configuracion' %}" class="active"><i class="bi bi-gear-fill"></i> Configuración</a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .config-card {
+    background: var(--mm-white);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--mm-border);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .semaphore-preview {
+    display: flex; gap: 1rem; margin-top: 1rem;
+  }
+  .preview-ticket {
+    background: #242424; border-radius: var(--radius-md); padding: 1rem;
+    border-left: 4px solid var(--kds-green); width: 200px;
+  }
+  .preview-timer { font-family: var(--font-mono); font-weight: 700; font-size: 1.5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12 col-lg-8">
+
+    <!-- Modo mantenimiento -->
+    <div class="config-card">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <h6 class="fw-bold mb-1">Modo mantenimiento</h6>
+          <p class="text-muted-mm" style="font-size:.8rem;" id="mantStatus">Inactivo — restaurante operando con normalidad</p>
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="toggleMantenimiento" onchange="toggleMantenimiento(this.checked)">
+        </div>
+      </div>
+    </div>
+
+    <!-- Mensaje personalizado -->
+    <div class="config-card">
+      <h6 class="fw-bold mb-2">Mensaje personalizado</h6>
+      <p class="text-muted-mm" style="font-size:.8rem;">Este mensaje se mostrará a los clientes cuando intenten acceder.</p>
+      <textarea id="mensajePersonalizado" class="form-control rounded-3" rows="2" placeholder="Estamos realizando mejoras. Volvemos en breve.">Estamos realizando mejoras. Volvemos en breve.</textarea>
+    </div>
+
+    <!-- Umbrales semáforo -->
+    <div class="config-card">
+      <h6 class="fw-bold mb-3">Umbrales del semáforo (KDS)</h6>
+      <p class="text-muted-mm" style="font-size:.8rem;">Configura los tiempos de advertencia y crítico para el sistema de display de cocina.</p>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Tiempo de advertencia <span class="text-muted-mm fw-normal">(minutos)</span></label>
+        <input type="range" class="form-range" id="umbralVerde" min="1" max="30" value="8" step="1"
+               oninput="document.getElementById('verdeVal').textContent = this.value; actualizarPreview();">
+        <div class="d-flex justify-content-between"><span>Ticket se vuelve ámbar después de</span><strong id="verdeVal">8</strong> min</div>
+      </div>
+      <div class="mb-4">
+        <label class="form-label fw-semibold">Tiempo crítico <span class="text-muted-mm fw-normal">(minutos)</span></label>
+        <input type="range" class="form-range" id="umbralRojo" min="1" max="60" value="15" step="1"
+               oninput="document.getElementById('rojoVal').textContent = this.value; actualizarPreview();">
+        <div class="d-flex justify-content-between"><span>Ticket se vuelve rojo después de</span><strong id="rojoVal">15</strong> min</div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary px-4 py-2" onclick="guardarConfiguracion()"><i class="bi bi-floppy me-2"></i>Guardar cambios</button>
+
+  </div>
+
+  <!-- Vista previa semáforo -->
+  <div class="col-12 col-lg-4">
+    <div class="config-card">
+      <h6 class="fw-bold mb-3">VISTA PREVIA DEL SEMÁFORO</h6>
+      <div class="semaphore-preview">
+        <div class="preview-ticket" id="previewTicket">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span style="color:#ccc; font-size:.7rem;">Mesa 5 · Mateo</span>
+            <span class="preview-timer" id="previewTimer">00:00</span>
+          </div>
+          <div style="color:#fff; font-size:.8rem;">1x Classic Matcha Latte</div>
+        </div>
+        <div class="d-flex flex-column justify-content-center gap-2">
+          <div><span class="badge" style="background:var(--kds-green);">Normal <span id="verdeRangeLabel"><8m</span></span></div>
+          <div><span class="badge" style="background:var(--kds-yellow);">Alerta <span id="amarilloRangeLabel">8-15m</span></span></div>
+          <div><span class="badge" style="background:var(--kds-red);">Crítico <span id="rojoRangeLabel">>15m</span></span></div>
+        </div>
+      </div>
+      <div class="mt-3">
+        <label class="form-label">Simular tiempo transcurrido</label>
+        <input type="range" class="form-range" id="simTimer" min="0" max="30" value="3" step="1"
+               oninput="actualizarPreview(); document.getElementById('simVal').textContent = this.value;">
+        <div class="text-center"><span id="simVal">3</span> minutos</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF = getCsrf();
+
+function actualizarPreview() {
+  const verde = parseInt(document.getElementById('umbralVerde').value);
+  const rojo = parseInt(document.getElementById('umbralRojo').value);
+  const sim = parseInt(document.getElementById('simTimer').value);
+
+  document.getElementById('verdeRangeLabel').textContent = `<${verde}m`;
+  document.getElementById('amarilloRangeLabel').textContent = `${verde}-${rojo}m`;
+  document.getElementById('rojoRangeLabel').textContent = `>${rojo}m`;
+
+  const ticket = document.getElementById('previewTicket');
+  const timer = document.getElementById('previewTimer');
+  const mins = String(sim).padStart(2,'0');
+  timer.textContent = `${mins}:00`;
+
+  let color = 'var(--kds-green)';
+  if (sim >= rojo) color = 'var(--kds-red)';
+  else if (sim >= verde) color = 'var(--kds-yellow)';
+
+  ticket.style.borderLeftColor = color;
+  timer.style.color = color;
+}
+
+function toggleMantenimiento(activo) {
+  const status = document.getElementById('mantStatus');
+  status.textContent = activo ? 'Activo — sitio en mantenimiento' : 'Inactivo — restaurante operando con normalidad';
+}
+
+function guardarConfiguracion() {
+  const data = {
+    mantenimiento: document.getElementById('toggleMantenimiento').checked,
+    mensaje: document.getElementById('mensajePersonalizado').value,
+    umbral_verde: document.getElementById('umbralVerde').value,
+    umbral_rojo: document.getElementById('umbralRojo').value
+  };
+  // Guardar en localStorage para demo; en producción enviar a endpoint
+  localStorage.setItem('mochi_config', JSON.stringify(data));
+  showToast('Configuración guardada (local)', 'success');
+}
+
+// Cargar configuración previa
+const saved = localStorage.getItem('mochi_config');
+if (saved) {
+  const cfg = JSON.parse(saved);
+  document.getElementById('toggleMantenimiento').checked = cfg.mantenimiento;
+  document.getElementById('mensajePersonalizado').value = cfg.mensaje;
+  document.getElementById('umbralVerde').value = cfg.umbral_verde;
+  document.getElementById('umbralRojo').value = cfg.umbral_rojo;
+  document.getElementById('verdeVal').textContent = cfg.umbral_verde;
+  document.getElementById('rojoVal').textContent = cfg.umbral_rojo;
+  toggleMantenimiento(cfg.mantenimiento);
+}
+actualizarPreview();
+</script>
+{% endblock %}

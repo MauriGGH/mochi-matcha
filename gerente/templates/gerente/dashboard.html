@@ -1,0 +1,221 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block sidebar_nav %}
+<a href="{% url 'gerente:dashboard' %}" class="active"><i class="bi bi-speedometer2"></i> Dashboard</a>
+<a href="{% url 'gerente:mesas' %}"><i class="bi bi-grid-fill"></i> Mapa de mesas</a>
+
+<div class="nav-section-label">Menú</div>
+<a href="{% url 'gerente:categorias' %}"><i class="bi bi-tags-fill"></i> Categorías</a>
+<a href="{% url 'gerente:productos' %}"><i class="bi bi-basket-fill"></i> Productos</a>
+<a href="{% url 'gerente:modificadores' %}"><i class="bi bi-sliders"></i> Modificadores</a>
+<a href="{% url 'gerente:promociones' %}"><i class="bi bi-percent"></i> Promociones</a>
+
+<div class="nav-section-label">Gestión</div>
+<a href="{% url 'gerente:empleados' %}"><i class="bi bi-people-fill"></i> Empleados</a>
+<a href="{% url 'gerente:mesas_crud' %}"><i class="bi bi-table"></i> Mesas</a>
+
+<div class="nav-section-label">Reportes</div>
+<a href="{% url 'gerente:reportes' %}"><i class="bi bi-bar-chart-fill"></i> Ventas</a>
+<a href="{% url 'gerente:auditoria' %}"><i class="bi bi-shield-check"></i> Auditoría</a>
+
+<div class="nav-section-label">Sistema</div>
+<a href="{% url 'gerente:configuracion' %}"><i class="bi bi-gear-fill"></i> Configuración</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Stats row -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="stat-value">${{ ventas_hoy|floatformat:0 }}</div>
+          <div class="stat-label">Ventas hoy</div>
+        </div>
+        <span style="font-size:1.5rem;">💰</span>
+      </div>
+      {% if delta_ventas %}
+      <div class="stat-delta {% if delta_ventas > 0 %}up{% else %}down{% endif %} mt-2">
+        <i class="bi bi-arrow-{% if delta_ventas > 0 %}up{% else %}down{% endif %}"></i>
+        {{ delta_ventas|floatformat:1 }}% vs ayer
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="stat-value">{{ pedidos_hoy }}</div>
+          <div class="stat-label">Pedidos hoy</div>
+        </div>
+        <span style="font-size:1.5rem;">🧾</span>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="stat-value">{{ mesas_ocupadas }}/{{ mesas_total }}</div>
+          <div class="stat-label">Mesas ocupadas</div>
+        </div>
+        <span style="font-size:1.5rem;">🪑</span>
+      </div>
+      <div class="mt-2">
+        <div class="progress" style="height:4px; border-radius:99px;">
+          <div class="progress-bar" style="width:{{ ocupacion_pct }}%; background:var(--mm-green);"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="stat-value">{{ clientes_activos }}</div>
+          <div class="stat-label">Clientes activos</div>
+        </div>
+        <span style="font-size:1.5rem;">👥</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Main grid -->
+<div class="row g-3">
+
+  <!-- Recent orders -->
+  <div class="col-12 col-xl-7">
+    <div class="card border-0 h-100">
+      <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2 px-3">
+        <span class="fw-bold" style="font-size:.875rem;">Pedidos recientes</span>
+        <a href="{% url 'gerente:reportes' %}" class="btn btn-link btn-sm p-0 text-green" style="font-size:.78rem;">
+          Ver todos <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table data-table mb-0">
+          <thead>
+            <tr>
+              <th class="ps-3">#</th>
+              <th>Mesa</th>
+              <th>Cliente</th>
+              <th>Total</th>
+              <th>Estado</th>
+              <th>Hora</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in pedidos_recientes %}
+            <tr>
+              <td class="ps-3 text-muted-mm">#{{ p.id }}</td>
+              <td><span class="badge rounded-pill" style="background:var(--mm-green-pale); color:var(--mm-green);">
+                M{{ p.sesion.mesa.numero_mesa }}</span></td>
+              <td>{{ p.sesion.alias }}</td>
+              <td class="fw-semibold">${{ p.total|floatformat:2 }}</td>
+              <td><span class="order-status-badge status-{{ p.estado }}">{{ p.get_estado_display }}</span></td>
+              <td class="text-muted-mm">{{ p.fecha_hora_ingreso|time:"H:i" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted-mm py-4">Sin pedidos hoy.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top products + quick actions -->
+  <div class="col-12 col-xl-5 d-flex flex-column gap-3">
+
+    <!-- Quick actions -->
+    <div class="card border-0">
+      <div class="card-header bg-white border-bottom py-2 px-3">
+        <span class="fw-bold" style="font-size:.875rem;">Acciones rápidas</span>
+      </div>
+      <div class="card-body">
+        <div class="row g-2">
+          <div class="col-6">
+            <a href="{% url 'gerente:productos_nuevo' %}"
+               class="d-flex flex-column align-items-center gap-1 p-2 rounded-3 text-center text-decoration-none"
+               style="background:var(--mm-green-pale); color:var(--mm-green);">
+              <i class="bi bi-plus-circle-fill" style="font-size:1.25rem;"></i>
+              <span style="font-size:.75rem; font-weight:600;">Nuevo producto</span>
+            </a>
+          </div>
+          <div class="col-6">
+            <a href="{% url 'gerente:empleados_nuevo' %}"
+               class="d-flex flex-column align-items-center gap-1 p-2 rounded-3 text-center text-decoration-none"
+               style="background:var(--mm-gold-pale); color:var(--mm-gold);">
+              <i class="bi bi-person-plus-fill" style="font-size:1.25rem;"></i>
+              <span style="font-size:.75rem; font-weight:600;">Nuevo empleado</span>
+            </a>
+          </div>
+          <div class="col-6">
+            <a href="{% url 'gerente:reportes' %}?periodo=hoy"
+               class="d-flex flex-column align-items-center gap-1 p-2 rounded-3 text-center text-decoration-none"
+               style="background:#EBF5FB; color:var(--mm-info);">
+              <i class="bi bi-bar-chart-fill" style="font-size:1.25rem;"></i>
+              <span style="font-size:.75rem; font-weight:600;">Reporte de hoy</span>
+            </a>
+          </div>
+          <div class="col-6">
+            <a href="{% url 'gerente:configuracion' %}"
+               class="d-flex flex-column align-items-center gap-1 p-2 rounded-3 text-center text-decoration-none"
+               style="background:#F9F0FF; color:#7C3AED;">
+              <i class="bi bi-gear-fill" style="font-size:1.25rem;"></i>
+              <span style="font-size:.75rem; font-weight:600;">Configuración</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top products -->
+    <div class="card border-0 flex-grow-1">
+      <div class="card-header bg-white border-bottom py-2 px-3">
+        <span class="fw-bold" style="font-size:.875rem;">Más vendidos hoy</span>
+      </div>
+      <div class="card-body p-0">
+        {% for prod in top_productos %}
+        <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom"
+             style="font-size:.825rem; {% if forloop.last %}border-bottom:none!important;{% endif %}">
+          <span class="fw-bold text-muted-mm" style="width:20px; text-align:right;">{{ forloop.counter }}</span>
+          <div class="flex-grow-1">
+            <div class="fw-semibold">{{ prod.nombre }}</div>
+            <div class="text-muted-mm" style="font-size:.72rem;">{{ prod.categoria }}</div>
+          </div>
+          <div class="text-end">
+            <div class="fw-bold" style="color:var(--mm-green);">{{ prod.total_vendido }} uds</div>
+            <div class="text-muted-mm" style="font-size:.72rem;">${{ prod.ingreso|floatformat:2 }}</div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted-mm py-4" style="font-size:.82rem;">Sin ventas registradas hoy.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Refresh stats every 30s
+setInterval(() => {
+  fetch('{% url "gerente:stats_json" %}')
+    .then(r => r.json())
+    .then(d => {
+      // Update stat cards silently
+    });
+}, 30000);
+</script>
+{% endblock %}

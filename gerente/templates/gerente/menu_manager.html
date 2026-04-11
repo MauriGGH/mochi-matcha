@@ -1,0 +1,514 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+
+{% block title %}Gestión de Menú{% endblock %}
+{% block page_title %}Gestión de Menú{% endblock %}
+
+{% block sidebar_nav %}
+<a href="{% url 'gerente:floor_plan' %}"><i class="bi bi-grid-fill"></i> Floor Plan</a>
+<div class="nav-section-label">Gestión de Menú</div>
+<a href="{% url 'gerente:productos' %}" class="{% if vista == 'productos' %}active{% endif %}">
+  <i class="bi bi-basket-fill"></i> Productos
+</a>
+<a href="{% url 'gerente:categorias' %}" class="{% if vista == 'categorias' %}active{% endif %}">
+  <i class="bi bi-tags-fill"></i> Categorías
+</a>
+<a href="{% url 'gerente:modificadores' %}" class="{% if vista == 'modificadores' %}active{% endif %}">
+  <i class="bi bi-sliders"></i> Modificadores
+</a>
+<a href="{% url 'gerente:promociones' %}" class="{% if vista == 'promociones' %}active{% endif %}">
+  <i class="bi bi-percent"></i> Promociones
+</a>
+<a href="{% url 'gerente:mesas_crud' %}" class="{% if vista == 'mesas' %}active{% endif %}">
+  <i class="bi bi-table"></i> Mesas
+</a>
+<div class="nav-section-label">Gestión</div>
+<a href="{% url 'gerente:empleados' %}"><i class="bi bi-people-fill"></i> Empleados</a>
+<div class="nav-section-label">Reportes</div>
+<a href="{% url 'gerente:reportes' %}"><i class="bi bi-bar-chart-fill"></i> Reportes</a>
+<a href="{% url 'gerente:auditoria' %}"><i class="bi bi-shield-check"></i> Auditoría</a>
+<div class="nav-section-label">Sistema</div>
+<a href="{% url 'gerente:configuracion' %}"><i class="bi bi-gear-fill"></i> Configuración</a>
+{% endblock %}
+
+{% block topbar_actions %}
+{% if vista == 'productos' %}
+<a href="{% url 'gerente:productos_nuevo' %}" class="btn btn-primary btn-sm rounded-pill px-3">
+  <i class="bi bi-plus me-1"></i>Nuevo producto
+</a>
+{% elif vista == 'categorias' %}
+<button class="btn btn-primary btn-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#modalCategoria">
+  <i class="bi bi-plus me-1"></i>Nueva categoría
+</button>
+{% elif vista == 'modificadores' %}
+<button class="btn btn-primary btn-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#modalModificador">
+  <i class="bi bi-plus me-1"></i>Nuevo grupo
+</button>
+{% elif vista == 'promociones' %}
+<button class="btn btn-primary btn-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#modalPromocion">
+  <i class="bi bi-plus me-1"></i>Nueva promoción
+</button>
+{% elif vista == 'mesas' %}
+<button class="btn btn-primary btn-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#modalMesa">
+  <i class="bi bi-plus me-1"></i>Nueva mesa
+</button>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .manager-tabs {
+    display: flex; gap: .25rem; border-bottom: 2px solid var(--mm-border);
+    margin-bottom: 1.5rem; padding-bottom: 0;
+  }
+  .manager-tab {
+    padding: .6rem 1.2rem; font-size: .85rem; font-weight: 600;
+    color: var(--mm-text-muted); border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    cursor: pointer; transition: all .15s; text-decoration: none;
+    border: 1px solid transparent; margin-bottom: -2px;
+  }
+  .manager-tab:hover { color: var(--mm-green); background: var(--mm-green-pale); }
+  .manager-tab.active {
+    color: var(--mm-green); background: var(--mm-white);
+    border-color: var(--mm-border) var(--mm-border) var(--mm-white);
+  }
+  .search-box {
+    max-width: 280px; border-radius: var(--radius-pill);
+    border: 1.5px solid var(--mm-border); padding: .4rem 1rem;
+    font-size: .85rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Pestañas de navegación -->
+<div class="manager-tabs">
+  <a href="{% url 'gerente:productos' %}" class="manager-tab {% if vista == 'productos' %}active{% endif %}">Productos</a>
+  <a href="{% url 'gerente:categorias' %}" class="manager-tab {% if vista == 'categorias' %}active{% endif %}">Categorías</a>
+  <a href="{% url 'gerente:modificadores' %}" class="manager-tab {% if vista == 'modificadores' %}active{% endif %}">Modificadores</a>
+  <a href="{% url 'gerente:promociones' %}" class="manager-tab {% if vista == 'promociones' %}active{% endif %}">Promociones</a>
+  <a href="{% url 'gerente:mesas_crud' %}" class="manager-tab {% if vista == 'mesas' %}active{% endif %}">Mesas</a>
+</div>
+
+<!-- ===== VISTA: PRODUCTOS ===== -->
+{% if vista == 'productos' %}
+<div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+  <input type="text" class="search-box" placeholder="🔍 Buscar producto..." id="searchInput" oninput="filterTable()">
+  <select class="form-select form-select-sm rounded-pill" style="max-width:160px;" id="catFilter" onchange="filterTable()">
+    <option value="">Todas las categorías</option>
+    {% for cat in categorias %}
+    <option value="{{ cat.nombre }}">{{ cat.nombre }}</option>
+    {% endfor %}
+  </select>
+  <select class="form-select form-select-sm rounded-pill" style="max-width:140px;" id="dispFilter" onchange="filterTable()">
+    <option value="">Todo</option>
+    <option value="disponible">Disponibles</option>
+    <option value="agotado">Agotados</option>
+  </select>
+  <span class="ms-auto text-muted-mm" style="font-size:.78rem;" id="countLabel">{{ productos|length }} producto(s)</span>
+</div>
+
+<div class="card border-0">
+  <div class="card-body p-0">
+    <table class="table data-table mb-0" id="productTable">
+      <thead>
+        <tr>
+          <th class="ps-3" style="width:56px;">Img</th>
+          <th>Nombre</th>
+          <th>Categoría</th>
+          <th>Precio</th>
+          <th>Modificadores</th>
+          <th>Disponible</th>
+          <th class="text-end pe-3">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for prod in productos %}
+        <tr class="prod-row" data-nombre="{{ prod.nombre|lower }}" data-cat="{{ prod.categoria.nombre }}" data-disp="{{ prod.disponible|yesno:'disponible,agotado' }}">
+          <td class="ps-3">
+            {% if prod.imagen_url %}
+            <img src="{{ prod.imagen_url }}" style="width:40px;height:40px;object-fit:cover;border-radius:var(--radius-sm);">
+            {% else %}
+            <div style="width:40px;height:40px;background:var(--mm-cream-dark);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;">🍽️</div>
+            {% endif %}
+          </td>
+          <td>
+            <div class="fw-semibold" style="font-size:.875rem;">{{ prod.nombre }}</div>
+            {% if prod.descripcion %}<div class="text-muted-mm" style="font-size:.72rem;">{{ prod.descripcion|truncatechars:40 }}</div>{% endif %}
+          </td>
+          <td><span class="badge rounded-pill" style="background:var(--mm-green-pale);color:var(--mm-green);">{{ prod.categoria.nombre }}</span></td>
+          <td class="fw-semibold" style="color:var(--mm-green);">${{ prod.precio }}</td>
+          <td>
+            {% with count=prod.grupos_modificadores.count %}
+            {% if count > 0 %}<span class="badge rounded-pill" style="background:var(--mm-gold-pale);color:var(--mm-gold);">{{ count }}</span>{% else %}—{% endif %}
+            {% endwith %}
+          </td>
+          <td>
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" {% if prod.disponible %}checked{% endif %}
+                     onchange="toggleDisponible({{ prod.id }}, this.checked)">
+            </div>
+          </td>
+          <td class="text-end pe-3">
+            <a href="{% url 'gerente:producto_editar' prod.id %}" class="btn btn-sm btn-outline-secondary rounded-2 px-2"><i class="bi bi-pencil"></i></a>
+            <button class="btn btn-sm btn-outline-danger rounded-2 px-2" onclick="eliminarProducto({{ prod.id }})"><i class="bi bi-trash3"></i></button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ===== VISTA: CATEGORÍAS ===== -->
+{% if vista == 'categorias' %}
+<div class="card border-0">
+  <div class="card-body p-0">
+    <table class="table data-table mb-0">
+      <thead><tr><th class="ps-3">Nombre</th><th>Orden</th><th>Área</th><th>Productos</th><th class="text-end pe-3">Acciones</th></tr></thead>
+      <tbody>
+        {% for cat in categorias %}
+        <tr>
+          <td class="ps-3 fw-semibold">{{ cat.nombre }}</td>
+          <td>{{ cat.orden }}</td>
+          <td>
+            <span class="badge rounded-pill" style="{% if cat.area == 'cocina' %}background:#EBF3FD;color:#2471A3;{% elif cat.area == 'bar' %}background:#FDF3E0;color:#C9933A;{% else %}background:var(--mm-cream-dark);color:var(--mm-text-muted);{% endif %}">
+              {{ cat.get_area_display }}
+            </span>
+          </td>
+          <td>{{ cat.productos.count }}</td>
+          <td class="text-end pe-3">
+            <button class="btn btn-sm btn-outline-danger rounded-2 px-2" onclick="eliminarCategoria({{ cat.id }})"><i class="bi bi-trash3"></i></button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<!-- Modal nueva categoría -->
+<div class="modal fade" id="modalCategoria" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content border-0 rounded-4">
+    <div class="modal-header border-0"><h5 class="modal-title fw-bold">Nueva categoría</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <form method="post" action="{% url 'gerente:categorias' %}">{% csrf_token %}
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label">Nombre</label><input type="text" name="nombre" class="form-control" required></div>
+        <div class="mb-3"><label class="form-label">Orden</label><input type="number" name="orden" class="form-control" value="0"></div>
+        <div class="mb-3"><label class="form-label">Área</label><select name="area" class="form-select"><option value="cocina">Cocina</option><option value="bar">Bar</option><option value="ambos">Ambos</option></select></div>
+      </div>
+      <div class="modal-footer border-0"><button type="submit" class="btn btn-primary w-100">Crear categoría</button></div>
+    </form>
+  </div></div>
+</div>
+{% endif %}
+
+<!-- ===== VISTA: MODIFICADORES ===== -->
+{% if vista == 'modificadores' %}
+<div class="card border-0">
+  <div class="card-body p-0">
+    <table class="table data-table mb-0">
+      <thead><tr><th class="ps-3">Grupo</th><th>Producto</th><th>Tipo</th><th>Obligatorio</th><th>Opciones</th><th class="text-end pe-3">Acciones</th></tr></thead>
+      <tbody>
+        {% for grupo in grupos %}
+        <tr>
+          <td class="ps-3 fw-semibold">{{ grupo.nombre_grupo }}</td>
+          <td>{{ grupo.producto.nombre }}</td>
+          <td>{{ grupo.get_tipo_display }}</td>
+          <td>{% if grupo.es_obligatorio %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}—{% endif %}</td>
+          <td>{{ grupo.opciones.count }} opción{{ grupo.opciones.count|pluralize }}</td>
+          <td class="text-end pe-3"><button class="btn btn-sm btn-outline-danger rounded-2 px-2" onclick="eliminarModificador({{ grupo.id }})"><i class="bi bi-trash3"></i></button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Nuevo grupo de modificadores -->
+<div class="modal fade" id="modalModificador" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content border-0 rounded-4">
+      <div class="modal-header border-0">
+        <h5 class="modal-title fw-bold">Nuevo grupo de modificadores</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formModificador">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label fw-semibold">Producto</label>
+              <select class="form-select" id="modProducto" required>
+                <option value="">Selecciona un producto</option>
+                {% for prod in productos_list %}
+                <option value="{{ prod.id }}">{{ prod.nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold">Nombre del grupo</label>
+              <input type="text" class="form-control" id="modNombreGrupo" placeholder="Ej. Tipo de leche" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Tipo</label>
+              <select class="form-select" id="modTipo">
+                <option value="única">Única selección</option>
+                <option value="múltiple">Selección múltiple</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check mt-4">
+                <input class="form-check-input" type="checkbox" id="modObligatorio">
+                <label class="form-check-label" for="modObligatorio">¿Es obligatorio?</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Máx. selecciones (opcional)</label>
+              <input type="number" class="form-control" id="modMaxSelecciones" min="1" placeholder="Solo para múltiple">
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <h6 class="fw-bold mb-3">Opciones del modificador</h6>
+          <div id="opcionesContainer"></div>
+          <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill mt-2" onclick="agregarOpcion()">
+            <i class="bi bi-plus me-1"></i>Agregar opción
+          </button>
+        </form>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary rounded-pill px-4" onclick="guardarModificador()">Crear grupo</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ===== VISTA: PROMOCIONES ===== -->
+{% if vista == 'promociones' %}
+<div class="row g-3">
+  {% for promo in promociones %}
+  <div class="col-12 col-md-6">
+    <div class="card border-0 h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div><h6 class="fw-bold mb-1">{{ promo.titulo }}</h6>
+            <span class="badge rounded-pill" style="background:var(--mm-gold-pale);color:var(--mm-gold);">{{ promo.tipo_promocion.descripcion }}</span>
+          </div>
+          <div class="form-check form-switch"><input class="form-check-input" type="checkbox" {% if promo.activa %}checked{% endif %} onchange="togglePromocion({{ promo.id }}, this.checked)"></div>
+        </div>
+        <p class="text-muted-mm mt-2" style="font-size:.8rem;">{{ promo.fecha_inicio|date:"d/m/Y" }} – {{ promo.fecha_fin|date:"d/m/Y" }}</p>
+        <div class="d-flex justify-content-between"><span>Valor:</span><strong>${{ promo.valor }}</strong></div>
+        <button class="btn btn-sm btn-outline-danger w-100 mt-3" onclick="eliminarPromocion({{ promo.id }})"><i class="bi bi-trash3 me-1"></i>Eliminar</button>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12 text-center py-4 text-muted-mm">No hay promociones activas.</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- ===== VISTA: MESAS (CRUD) ===== -->
+{% if vista == 'mesas' %}
+<div class="row g-3">
+  {% for mesa in mesas %}
+  <div class="col-6 col-md-4 col-lg-3">
+    <div class="card border-0 h-100">
+      <div class="card-body text-center">
+        <div class="mesa-num" style="font-size:2rem;">{{ mesa.numero_mesa }}</div>
+        <span class="badge rounded-pill mb-2 {% if mesa.estado == 'libre' %}bg-secondary{% else %}bg-success{% endif %}">{{ mesa.estado|title }}</span>
+        <div class="text-muted-mm" style="font-size:.75rem;">Cap. {{ mesa.capacidad }} · {{ mesa.ubicacion|default:"—" }}</div>
+        <div class="mt-2">
+          <select class="form-select form-select-sm" onchange="asignarMesero({{ mesa.id }}, this.value)">
+            <option value="">Sin mesero</option>
+            {% for mesero in meseros %}
+            <option value="{{ mesero.id }}" {% if mesa.id_mesero_asignado_id == mesero.id %}selected{% endif %}>{{ mesero.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% if mesa.estado == 'libre' %}
+        <button class="btn btn-sm btn-outline-danger w-100 mt-2" onclick="eliminarMesa({{ mesa.id }})"><i class="bi bi-trash3"></i></button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<!-- Modal nueva mesa -->
+<div class="modal fade" id="modalMesa" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content border-0 rounded-4">
+    <div class="modal-header border-0"><h5 class="modal-title fw-bold">Nueva mesa</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <form method="post" action="{% url 'gerente:mesas_crud' %}">{% csrf_token %}
+      <div class="modal-body">
+        <div class="mb-3"><label>Número</label><input type="number" name="numero_mesa" class="form-control" required></div>
+        <div class="mb-3"><label>Capacidad</label><input type="number" name="capacidad" class="form-control" value="4"></div>
+        <div class="mb-3"><label>Ubicación</label><input type="text" name="ubicacion" class="form-control" placeholder="Ej. Terraza"></div>
+      </div>
+      <div class="modal-footer border-0"><button type="submit" class="btn btn-primary w-100">Crear mesa</button></div>
+    </form>
+  </div></div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF = getCsrf();
+
+function filterTable() {
+  const q = document.getElementById('searchInput')?.value.toLowerCase() || '';
+  const cat = document.getElementById('catFilter')?.value || '';
+  const disp = document.getElementById('dispFilter')?.value || '';
+  let count = 0;
+  document.querySelectorAll('.prod-row').forEach(row => {
+    const show = (!q || row.dataset.nombre.includes(q)) && (!cat || row.dataset.cat === cat) && (!disp || row.dataset.disp === disp);
+    row.style.display = show ? '' : 'none';
+    if (show) count++;
+  });
+  const label = document.getElementById('countLabel');
+  if (label) label.textContent = `${count} producto(s)`;
+}
+
+function toggleDisponible(id, val) {
+  fetch(`/gerente/menu/productos/${id}/editar/`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ disponible: val })
+  }).then(r => r.json()).then(() => showToast(val ? 'Disponible' : 'Agotado', 'success'));
+}
+
+function eliminarProducto(id) {
+  if (!confirm('¿Desactivar producto?')) return;
+  fetch(`/gerente/menu/productos/${id}/eliminar/`, { method: 'POST', headers: {'X-CSRFToken': CSRF} })
+    .then(() => location.reload());
+}
+
+function eliminarCategoria(id) {
+  if (!confirm('¿Eliminar categoría?')) return;
+  fetch(`/gerente/menu/categorias/${id}/eliminar/`, { method: 'POST', headers: {'X-CSRFToken': CSRF} })
+    .then(r => r.json()).then(d => { if (d.ok) location.reload(); else showToast(d.error, 'error'); });
+}
+
+function eliminarModificador(id) {
+  if (!confirm('¿Eliminar grupo de modificadores?')) return;
+  fetch(`/gerente/menu/modificadores/${id}/eliminar/`, { method: 'POST', headers: {'X-CSRFToken': CSRF} })
+    .then(() => location.reload());
+}
+
+function togglePromocion(id, val) {
+  fetch(`/gerente/menu/promociones/${id}/toggle/`, { method: 'POST', headers: {'X-CSRFToken': CSRF} })
+    .then(() => showToast(val ? 'Promoción activada' : 'Promoción desactivada', 'success'));
+}
+
+function eliminarPromocion(id) {
+  if (!confirm('¿Eliminar promoción?')) return;
+  fetch(`/gerente/menu/promociones/${id}/eliminar/`, { method: 'POST', headers: {'X-CSRFToken': CSRF} })
+    .then(() => location.reload());
+}
+
+function asignarMesero(mesaId, meseroId) {
+  fetch(`/gerente/mesas/${mesaId}/asignar/`, {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF },
+    body: `mesero_id=${meseroId}`
+  }).then(() => showToast('Mesero asignado', 'success'));
+}
+
+function eliminarMesa(id) {
+  if (!confirm('¿Eliminar mesa?')) return;
+  fetch(`/gerente/mesas/${id}/eliminar/`, { method: 'POST', headers: {'X-CSRFToken': CSRF} })
+    .then(() => location.reload());
+}
+
+// ---------- MODIFICADORES: Modal y creación ----------
+function agregarOpcion() {
+  const container = document.getElementById('opcionesContainer');
+  const index = container.children.length;
+  const html = `
+    <div class="row g-2 mb-2 align-items-end" id="opcion-${index}">
+      <div class="col-7">
+        <input type="text" class="form-control form-control-sm" placeholder="Nombre de la opción" data-nombre>
+      </div>
+      <div class="col-3">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text">$</span>
+          <input type="number" class="form-control" placeholder="0.00" step="0.01" min="0" value="0" data-precio>
+        </div>
+      </div>
+      <div class="col-2">
+        <button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="document.getElementById('opcion-${index}').remove()">
+          <i class="bi bi-trash3"></i>
+        </button>
+      </div>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', html);
+}
+
+function guardarModificador() {
+  const productoId = document.getElementById('modProducto').value;
+  const nombreGrupo = document.getElementById('modNombreGrupo').value.trim();
+  const tipo = document.getElementById('modTipo').value;
+  const esObligatorio = document.getElementById('modObligatorio').checked;
+  const maxSelecciones = document.getElementById('modMaxSelecciones').value;
+
+  if (!productoId || !nombreGrupo) {
+    showToast('Producto y nombre del grupo son obligatorios', 'error');
+    return;
+  }
+
+  const opciones = [];
+  document.querySelectorAll('#opcionesContainer > div').forEach(row => {
+    const nombre = row.querySelector('[data-nombre]')?.value.trim();
+    const precio = parseFloat(row.querySelector('[data-precio]')?.value) || 0;
+    if (nombre) {
+      opciones.push({ nombre, precio_extra: precio });
+    }
+  });
+
+  if (opciones.length === 0) {
+    showToast('Debes agregar al menos una opción', 'error');
+    return;
+  }
+
+  const data = {
+    producto_id: parseInt(productoId),
+    nombre_grupo: nombreGrupo,
+    tipo: tipo,
+    es_obligatorio: esObligatorio,
+    max_selecciones: maxSelecciones ? parseInt(maxSelecciones) : null,
+    opciones: opciones
+  };
+
+  fetch('{% url "gerente:modificador_crear" %}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': CSRF
+    },
+    body: JSON.stringify(data)
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.ok) {
+      showToast('Grupo de modificadores creado', 'success');
+      bootstrap.Modal.getInstance(document.getElementById('modalModificador')).hide();
+      setTimeout(() => location.reload(), 500);
+    } else {
+      showToast(d.error || 'Error al crear', 'error');
+    }
+  })
+  .catch(() => showToast('Error de conexión', 'error'));
+}
+
+// Limpiar modal al abrir
+document.getElementById('modalModificador').addEventListener('show.bs.modal', function() {
+  document.getElementById('formModificador').reset();
+  document.getElementById('opcionesContainer').innerHTML = '';
+  agregarOpcion(); // al menos una opción por defecto
+});
+</script>
+{% endblock %}

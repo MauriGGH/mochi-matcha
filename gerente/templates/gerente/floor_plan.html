@@ -1,0 +1,417 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+
+{% block title %}Floor Plan{% endblock %}
+{% block page_title %}Floor Plan{% endblock %}
+
+{% block sidebar_nav %}
+<a href="{% url 'gerente:floor_plan' %}" class="active"><i class="bi bi-grid-fill"></i> Floor Plan</a>
+<div class="nav-section-label">Gestión de Menú</div>
+<a href="{% url 'gerente:productos' %}"><i class="bi bi-basket-fill"></i> Productos</a>
+<a href="{% url 'gerente:categorias' %}"><i class="bi bi-tags-fill"></i> Categorías</a>
+<a href="{% url 'gerente:modificadores' %}"><i class="bi bi-sliders"></i> Modificadores</a>
+<a href="{% url 'gerente:promociones' %}"><i class="bi bi-percent"></i> Promociones</a>
+<a href="{% url 'gerente:mesas_crud' %}"><i class="bi bi-table"></i> Mesas</a>
+<div class="nav-section-label">Gestión</div>
+<a href="{% url 'gerente:empleados' %}"><i class="bi bi-people-fill"></i> Empleados</a>
+<div class="nav-section-label">Reportes</div>
+<a href="{% url 'gerente:reportes' %}"><i class="bi bi-bar-chart-fill"></i> Reportes</a>
+<a href="{% url 'gerente:auditoria' %}"><i class="bi bi-shield-check"></i> Auditoría</a>
+<div class="nav-section-label">Sistema</div>
+<a href="{% url 'gerente:configuracion' %}"><i class="bi bi-gear-fill"></i> Configuración</a>
+{% endblock %}
+
+{% block topbar_actions %}
+<span class="badge rounded-pill me-2" style="background:var(--mm-green-pale); color:var(--mm-green);">
+  <i class="bi bi-circle-fill me-1" style="font-size:.4rem;"></i>
+  <span id="mesasActivasCount">0</span> activas
+</span>
+<span class="badge rounded-pill me-2" style="background:var(--mm-gold-pale); color:var(--mm-gold);">
+  <i class="bi bi-receipt me-1"></i>
+  <span id="solicitudesCount">0</span> solicitudes
+</span>
+<button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="location.reload()">
+  <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+</button>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .filter-bar-gerente {
+    display: flex; gap: .5rem; margin-bottom: 1.5rem;
+    flex-wrap: wrap; align-items: center;
+  }
+  .filter-chip {
+    border: 1.5px solid var(--mm-border);
+    background: var(--mm-white);
+    color: var(--mm-text-muted);
+    border-radius: var(--radius-pill);
+    padding: .3rem .9rem;
+    font-size: .78rem; font-weight: 600;
+    cursor: pointer; transition: all .15s;
+    display: inline-flex; align-items: center; gap: .3rem;
+  }
+  .filter-chip.active {
+    background: var(--mm-green);
+    border-color: var(--mm-green);
+    color: #fff;
+  }
+  .filter-chip i { font-size: .9rem; }
+  .mesa-tile.gerente .mesa-actions {
+    position: absolute; bottom: .5rem; right: .5rem;
+    display: flex; gap: .2rem; opacity: 0; transition: opacity .2s;
+  }
+  .mesa-tile.gerente:hover .mesa-actions { opacity: 1; }
+  .action-icon {
+    background: rgba(255,255,255,.9);
+    border-radius: 50%; width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--mm-text); font-size: .9rem;
+    box-shadow: var(--shadow-sm); cursor: pointer;
+    border: 1px solid var(--mm-border);
+  }
+  .action-icon:hover { background: var(--mm-green); color: #fff; border-color: var(--mm-green); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filtros y leyenda -->
+<div class="filter-bar-gerente">
+  <span class="filter-chip active" onclick="filterMesas('todas', this)">
+    <i class="bi bi-grid"></i> Todas (<span id="totalMesas">0</span>)
+  </span>
+  <span class="filter-chip" onclick="filterMesas('libre', this)">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-text-muted);"></span>
+    Libres
+  </span>
+  <span class="filter-chip" onclick="filterMesas('ocupada', this)">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-green);"></span>
+    Ocupadas
+  </span>
+  <span class="filter-chip" onclick="filterMesas('cocina', this)">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-info);"></span>
+    En cocina
+  </span>
+  <span class="filter-chip" onclick="filterMesas('listo', this)">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-success);"></span>
+    Listo
+  </span>
+  <span class="filter-chip" onclick="filterMesas('cobrando', this)">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-gold);"></span>
+    Cobrando
+  </span>
+  <span class="filter-chip" onclick="filterMesas('solicitud', this)">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-danger);"></span>
+    Solicitud
+  </span>
+</div>
+
+<!-- Grid de mesas -->
+<div class="table-grid" id="mesaGrid">
+  {% for mesa in mesas %}
+  <div class="mesa-tile gerente {{ mesa.estado }}"
+       data-id="{{ mesa.id }}"
+       data-numero="{{ mesa.numero_mesa }}"
+       data-estado="{{ mesa.estado }}"
+       data-pin="{{ mesa.pin_actual|default:'' }}"
+       data-sesiones="{{ mesa.sesiones_activas_count|default:0 }}"
+       data-solicitud="{{ mesa.tiene_solicitud|yesno:'true,false' }}"
+       data-listos="{{ mesa.pedidos_listos_count|default:0 }}"
+       data-cocina="{{ mesa.pedidos_cocina_count|default:0 }}">
+
+    <div class="mesa-dot"></div>
+    <div class="mesa-num">{{ mesa.numero_mesa }}</div>
+    <div class="mesa-label">
+      {% if mesa.estado == 'libre' %}Libre
+      {% elif mesa.tiene_solicitud %}Solicitud
+      {% elif mesa.pedidos_listos_count > 0 %}¡Listo!
+      {% elif mesa.pedidos_cocina_count > 0 %}En cocina
+      {% else %}Ocupada
+      {% endif %}
+    </div>
+    {% if mesa.sesiones_activas_count %}
+    <div style="font-size:.7rem; margin-top:.2rem; color:var(--mm-text-muted);">
+      {{ mesa.sesiones_activas_count }} sesión{{ mesa.sesiones_activas_count|pluralize }}
+    </div>
+    {% endif %}
+
+    <!-- Acciones rápidas -->
+    <div class="mesa-actions">
+      <span class="action-icon" onclick="event.stopPropagation(); abrirPanel({{ mesa.id }})" title="Ver detalle">
+        <i class="bi bi-eye"></i>
+      </span>
+      <span class="action-icon" onclick="event.stopPropagation(); verPIN('{{ mesa.pin_actual|default:'—' }}')" title="Ver PIN">
+        <i class="bi bi-key"></i>
+      </span>
+      {% if mesa.estado != 'libre' %}
+      <span class="action-icon" onclick="event.stopPropagation(); confirmarCerrarMesa({{ mesa.id }})" title="Cerrar mesa">
+        <i class="bi bi-x-circle"></i>
+      </span>
+      {% endif %}
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-span-full text-center py-5 text-muted-mm">
+    No hay mesas configuradas.
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Panel lateral (offcanvas) -->
+<div class="offcanvas offcanvas-end" style="width:400px;" tabindex="-1" id="mesaPanel">
+  <div class="offcanvas-header border-bottom">
+    <h5 class="offcanvas-title fw-bold">
+      Mesa <span id="panelMesaNum">—</span>
+      <span class="ms-2 badge rounded-pill" id="panelPinBadge" style="background:var(--mm-green-pale); color:var(--mm-green);"></span>
+    </h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body p-3" id="panelBody">
+    <div class="text-center py-4 text-muted-mm">
+      <div class="spinner-border spinner-border-sm"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Template del panel -->
+<template id="panelTemplate">
+  <div>
+    <!-- Info rápida -->
+    <div class="d-flex justify-content-between mb-3">
+      <div>
+        <span class="fw-semibold" style="font-size:.8rem; color:var(--mm-text-muted);">PIN DE MESA</span>
+        <div class="mesa-panel-pin" id="pinDisplay" style="font-size:1.8rem; letter-spacing:.2em;">****</div>
+      </div>
+      <div class="text-end">
+        <span class="fw-semibold" style="font-size:.8rem; color:var(--mm-text-muted);">TOTAL</span>
+        <div class="fw-bold" style="font-size:1.5rem; color:var(--mm-green);" id="totalMesaDisplay">$0.00</div>
+      </div>
+    </div>
+
+    <!-- Sesiones -->
+    <div class="mb-3">
+      <span class="fw-semibold d-block mb-2" style="font-size:.8rem; color:var(--mm-text-muted);">SESIONES ACTIVAS</span>
+      <div id="sessionList"></div>
+    </div>
+
+    <!-- Pedidos -->
+    <div class="mb-3">
+      <span class="fw-semibold d-block mb-2" style="font-size:.8rem; color:var(--mm-text-muted);">PEDIDOS</span>
+      <div id="orderList"></div>
+    </div>
+
+    <!-- Solicitudes de pago -->
+    <div class="mb-3">
+      <span class="fw-semibold d-block mb-2" style="font-size:.8rem; color:var(--mm-text-muted);">SOLICITUDES DE PAGO</span>
+      <div id="solicitudList"></div>
+    </div>
+
+    <!-- Acciones -->
+    <div class="d-grid gap-2 mt-3">
+      <button class="btn btn-outline-primary py-2" id="btnProcesarPago" onclick="irAPago()">
+        <i class="bi bi-credit-card me-2"></i>Procesar pago
+      </button>
+      <button class="btn btn-outline-danger py-2" onclick="confirmarCerrarMesa(currentMesaId)">
+        <i class="bi bi-x-circle me-2"></i>Cerrar mesa
+      </button>
+    </div>
+  </div>
+</template>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF = getCsrf();
+let currentMesaId = null;
+let mesasData = [];
+
+// Cargar estado inicial
+function cargarEstadoMesas() {
+  fetch('{% url "gerente:mesas_estado" %}')
+    .then(r => r.json())
+    .then(data => {
+      mesasData = data.mesas;
+      document.getElementById('mesasActivasCount').textContent = data.mesas.filter(m => m.estado !== 'libre').length;
+      document.getElementById('solicitudesCount').textContent = data.solicitudes_count;
+      document.getElementById('totalMesas').textContent = data.mesas.length;
+      actualizarTiles();
+    });
+}
+
+function actualizarTiles() {
+  mesasData.forEach(m => {
+    const tile = document.querySelector(`.mesa-tile[data-id="${m.id}"]`);
+    if (tile) {
+      tile.dataset.estado = m.estado_visual || m.estado;
+      tile.dataset.sesiones = m.clientes;
+      tile.dataset.solicitud = m.tiene_solicitud;
+      tile.dataset.listos = m.pedidos_listos;
+      tile.dataset.cocina = m.pedidos_cocina;
+      tile.dataset.pin = m.pin;
+      tile.className = `mesa-tile gerente ${m.estado_visual || m.estado}`;
+
+      const label = tile.querySelector('.mesa-label');
+      if (m.estado === 'libre') label.textContent = 'Libre';
+      else if (m.tiene_solicitud) label.textContent = 'Solicitud';
+      else if (m.pedidos_listos > 0) label.textContent = '¡Listo!';
+      else if (m.pedidos_cocina > 0) label.textContent = 'En cocina';
+      else label.textContent = 'Ocupada';
+
+      const dot = tile.querySelector('.mesa-dot');
+      dot.style.background = {
+        'libre': 'var(--mm-text-muted)',
+        'ocupada': 'var(--mm-green)',
+        'cocina': 'var(--mm-info)',
+        'listo': 'var(--mm-success)',
+        'cobrando': 'var(--mm-gold)',
+        'solicitud': 'var(--mm-danger)'
+      }[m.estado_visual] || 'var(--mm-green)';
+    }
+  });
+}
+
+function filterMesas(estado, btn) {
+  document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.mesa-tile').forEach(tile => {
+    if (estado === 'todas') tile.style.display = '';
+    else if (estado === 'solicitud') tile.style.display = tile.dataset.solicitud === 'true' ? '' : 'none';
+    else if (estado === 'listo') tile.style.display = parseInt(tile.dataset.listos || 0) > 0 ? '' : 'none';
+    else if (estado === 'cocina') tile.style.display = parseInt(tile.dataset.cocina || 0) > 0 ? '' : 'none';
+    else tile.style.display = tile.dataset.estado === estado ? '' : 'none';
+  });
+}
+
+function verPIN(pin) {
+  if (!pin || pin === '—') {
+    showToast('Esta mesa no tiene PIN activo', 'warning');
+    return;
+  }
+  showToast(`PIN de la mesa: ${pin}`, 'info');
+}
+
+function abrirPanel(mesaId) {
+  currentMesaId = mesaId;
+  const mesa = mesasData.find(m => m.id == mesaId);
+  if (!mesa) return;
+
+  document.getElementById('panelMesaNum').textContent = mesa.numero;
+  document.getElementById('panelPinBadge').textContent = mesa.pin || '—';
+
+  fetch(`/gerente/floor-plan/mesa/${mesaId}/`)
+    .then(r => r.json())
+    .then(data => renderPanel(data));
+}
+
+function renderPanel(data) {
+  const body = document.getElementById('panelBody');
+  const tpl = document.getElementById('panelTemplate').content.cloneNode(true);
+
+  tpl.getElementById('pinDisplay').textContent = data.pin || '****';
+  tpl.getElementById('totalMesaDisplay').textContent = `$${data.total_mesa.toFixed(2)}`;
+
+  const sessEl = tpl.getElementById('sessionList');
+  if (data.sesiones?.length) {
+    sessEl.innerHTML = data.sesiones.map(s => `
+      <div class="d-flex align-items-center justify-content-between p-2 mb-1 rounded-2" style="background:var(--mm-cream);">
+        <div><i class="bi bi-person me-1 text-green"></i><strong>${s.alias}</strong></div>
+        <div class="d-flex gap-2 align-items-center">
+          <span class="fw-semibold" style="color:var(--mm-green);">$${s.total.toFixed(2)}</span>
+        </div>
+      </div>`).join('');
+  } else {
+    sessEl.innerHTML = '<p class="text-muted-mm" style="font-size:.82rem;">Sin sesiones activas.</p>';
+  }
+
+  const ordEl = tpl.getElementById('orderList');
+  const todosPedidos = data.sesiones?.flatMap(s => s.pedidos.map(p => ({...p, alias: s.alias}))) || [];
+  if (todosPedidos.length) {
+    ordEl.innerHTML = todosPedidos.map(p => `
+      <div class="d-flex align-items-center justify-content-between p-2 mb-1 rounded-2" style="background:var(--mm-cream);">
+        <div>
+          <strong>#${p.id}</strong> <span class="text-muted-mm ms-1">${p.alias}</span>
+          <div class="text-muted-mm" style="font-size:.72rem;">${p.items.map(i => `${i.cantidad}x ${i.nombre}`).join(', ')}</div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <span class="order-status-badge status-${p.estado}">${p.estado_display}</span>
+          ${p.estado !== 'cancelado' && p.estado !== 'entregado' ? `
+            <button class="btn btn-sm btn-outline-danger rounded-2 px-2" style="font-size:.7rem;"
+                    onclick="cancelarPedido(${p.id})" title="Cancelar pedido">
+              <i class="bi bi-x-circle"></i>
+            </button>` : ''}
+        </div>
+      </div>`).join('');
+  } else {
+    ordEl.innerHTML = '<p class="text-muted-mm" style="font-size:.82rem;">Sin pedidos activos.</p>';
+  }
+
+  const solEl = tpl.getElementById('solicitudList');
+  if (data.solicitudes?.length) {
+    solEl.innerHTML = data.solicitudes.map(sol => `
+      <div class="d-flex align-items-center justify-content-between p-2 mb-1 rounded-2" style="background:var(--mm-gold-pale); border:1px solid var(--mm-gold);">
+        <div>
+          <i class="bi bi-receipt me-1 text-gold"></i>
+          <strong>${sol.alias}</strong> · ${sol.tipo_display}
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <span class="fw-bold" style="color:var(--mm-gold);">$${sol.total.toFixed(2)}</span>
+          <button class="btn btn-sm btn-gold rounded-pill px-3 py-0" onclick="irAPago()">
+            Cobrar
+          </button>
+        </div>
+      </div>`).join('');
+  } else {
+    solEl.innerHTML = '<p class="text-muted-mm" style="font-size:.82rem;">Sin solicitudes pendientes.</p>';
+  }
+
+  body.innerHTML = '';
+  body.appendChild(tpl);
+  new bootstrap.Offcanvas(document.getElementById('mesaPanel')).show();
+}
+
+function cancelarPedido(pedidoId) {
+  const motivo = prompt('Motivo de cancelación (obligatorio):');
+  if (!motivo) return;
+  fetch('{% url "gerente:cancelar_pedido" %}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ pedido_id: pedidoId, motivo })
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      showToast('Pedido cancelado', 'success');
+      abrirPanel(currentMesaId);
+      cargarEstadoMesas();
+    } else {
+      showToast(d.error, 'error');
+    }
+  });
+}
+
+function confirmarCerrarMesa(mesaId) {
+  if (!confirm('¿Cerrar la mesa? Se invalidará el PIN y se cerrarán todas las sesiones activas.')) return;
+  fetch('{% url "mesero:cerrar_mesa" %}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ mesa_id: mesaId })
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      bootstrap.Offcanvas.getInstance(document.getElementById('mesaPanel'))?.hide();
+      showToast('Mesa cerrada correctamente', 'success');
+      cargarEstadoMesas();
+    } else {
+      showToast(d.error, 'error');
+    }
+  });
+}
+
+function irAPago() {
+  if (currentMesaId) window.location.href = `/mesero/pago/?mesa=${currentMesaId}`;
+}
+
+// Inicializar y polling
+cargarEstadoMesas();
+setInterval(cargarEstadoMesas, 15000);
+</script>
+{% endblock %}

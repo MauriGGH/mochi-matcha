@@ -1,0 +1,202 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+
+{% block title %}Empleados{% endblock %}
+{% block page_title %}Empleados{% endblock %}
+
+{% block sidebar_nav %}
+<a href="{% url 'gerente:dashboard' %}"><i class="bi bi-speedometer2"></i> Dashboard</a>
+<div class="nav-section-label">Gestión</div>
+<a href="{% url 'gerente:empleados' %}" class="active"><i class="bi bi-people-fill"></i> Empleados</a>
+<a href="{% url 'gerente:mesas_crud' %}"><i class="bi bi-table"></i> Mesas</a>
+<div class="nav-section-label">Reportes</div>
+<a href="{% url 'gerente:reportes' %}"><i class="bi bi-bar-chart-fill"></i> Reportes</a>
+<a href="{% url 'gerente:auditoria' %}"><i class="bi bi-shield-check"></i> Auditoría</a>
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm rounded-pill px-3"
+        data-bs-toggle="modal" data-bs-target="#modalEmpleado">
+  <i class="bi bi-person-plus me-1"></i>Nuevo empleado
+</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="card border-0">
+  <div class="card-body p-0">
+    <table class="table data-table mb-0">
+      <thead>
+        <tr>
+          <th class="ps-3">Empleado</th>
+          <th>Usuario</th>
+          <th>Rol</th>
+          <th>Estado</th>
+          <th>Última actividad</th>
+          <th class="text-end pe-3">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for emp in empleados %}
+        <tr>
+          <td class="ps-3">
+            <div class="d-flex align-items-center gap-2">
+              <div class="avatar-circle" style="background:{% cycle 'var(--mm-green)' 'var(--mm-gold)' '#7C3AED' '#1A6A8A' %};">
+                {{ emp.nombre|first|upper }}
+              </div>
+              <div>
+                <div class="fw-semibold" style="font-size:.875rem;">{{ emp.nombre }}</div>
+                {% if not emp.is_active %}
+                <span class="badge rounded-pill bg-secondary" style="font-size:.6rem;">Inactivo</span>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+          <td style="font-size:.85rem; font-family:var(--font-mono); color:var(--mm-text-muted);">
+            {{ emp.usuario }}
+          </td>
+          <td>
+            <span class="badge rounded-pill"
+                  style="font-size:.72rem;
+                  {% if emp.rol == 'admin' %}background:#F3E8FF;color:#7C3AED;
+                  {% elif emp.rol == 'gerente' %}background:var(--mm-gold-pale);color:var(--mm-gold);
+                  {% else %}background:var(--mm-green-pale);color:var(--mm-green);{% endif %}">
+              {{ emp.get_rol_display }}
+            </span>
+          </td>
+          <td>
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox"
+                     {% if emp.is_active %}checked{% endif %}
+                     onchange="toggleActivo({{ emp.id }}, this.checked)"
+                     {% if emp == request.user %}disabled title="No puedes desactivarte a ti mismo"{% endif %}>
+            </div>
+          </td>
+          <td class="text-muted-mm" style="font-size:.8rem;">
+            {{ emp.last_login|date:"d/m/Y H:i"|default:"—" }}
+          </td>
+          <td class="text-end pe-3">
+            <button class="btn btn-sm btn-outline-secondary rounded-2 px-2"
+                    style="font-size:.75rem;"
+                    onclick="editarEmpleado({{ emp.id }}, '{{ emp.nombre|escapejs }}',
+                      '{{ emp.usuario|escapejs }}', '{{ emp.rol }}')">
+              <i class="bi bi-pencil"></i>
+            </button>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-center text-muted-mm py-5">
+            No hay empleados registrados.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+<!-- Modal: Create / Edit employee -->
+<div class="modal fade" id="modalEmpleado" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:400px;">
+    <div class="modal-content border-0 rounded-4 mx-3">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="modalEmpleadoTitle">Nuevo empleado</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-4 pb-4">
+        <form method="post" action="{% url 'gerente:empleados_nuevo' %}" id="formEmpleado">
+          {% csrf_token %}
+          <input type="hidden" name="empleado_id" id="empleadoId">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:.82rem;">Nombre completo</label>
+            <input type="text" name="nombre" id="empNombre" class="form-control rounded-3" required
+                   maxlength="100" placeholder="Ej. Ana García">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:.82rem;">Usuario</label>
+            <input type="text" name="usuario" id="empUsuario" class="form-control rounded-3" required
+                   maxlength="50" placeholder="Ej. ana.garcia"
+                   autocomplete="off" autocorrect="off" autocapitalize="off">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:.82rem;">
+              Contraseña <span class="text-muted-mm fw-normal" id="passHint">(mínimo 8 caracteres)</span>
+            </label>
+            <div class="input-group">
+              <input type="password" name="password" id="empPassword" class="form-control rounded-start-3"
+                     placeholder="••••••••" autocomplete="new-password">
+              <button type="button" class="input-group-text btn" style="border-color:var(--mm-border);"
+                      onclick="this.previousElementSibling.type =
+                        this.previousElementSibling.type === 'password' ? 'text' : 'password'">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold" style="font-size:.82rem;">Rol</label>
+            <select name="rol" id="empRol" class="form-select rounded-3" required>
+              <option value="mesero">Mesero</option>
+              <option value="gerente">Gerente</option>
+              {% if request.user.rol == 'admin' %}
+              <option value="admin">Admin</option>
+              {% endif %}
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 py-2" id="btnGuardarEmp">
+            <i class="bi bi-person-plus me-2"></i>Crear empleado
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF = getCsrf();
+
+function editarEmpleado(id, nombre, usuario, rol) {
+  document.getElementById('modalEmpleadoTitle').textContent = 'Editar empleado';
+  document.getElementById('empleadoId').value = id;
+  document.getElementById('empNombre').value  = nombre;
+  document.getElementById('empUsuario').value = usuario;
+  document.getElementById('empRol').value     = rol;
+  document.getElementById('empPassword').required = false;
+  document.getElementById('passHint').textContent = '(dejar vacío para no cambiar)';
+  document.getElementById('btnGuardarEmp').innerHTML = '<i class="bi bi-floppy me-2"></i>Guardar cambios';
+  document.getElementById('formEmpleado').action = `/gerente/empleados/${id}/editar/`;
+  new bootstrap.Modal(document.getElementById('modalEmpleado')).show();
+}
+
+function toggleActivo(id, activo) {
+  fetch(`/gerente/empleados/${id}/editar/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ is_active: activo })
+  }).then(r => r.json()).then(() => {
+    showToast(activo ? 'Empleado activado' : 'Empleado desactivado',
+              activo ? 'success' : 'warning');
+  });
+}
+
+// Reset modal on close
+document.getElementById('modalEmpleado').addEventListener('hidden.bs.modal', () => {
+  document.getElementById('formEmpleado').reset();
+  document.getElementById('empleadoId').value = '';
+  document.getElementById('modalEmpleadoTitle').textContent = 'Nuevo empleado';
+  document.getElementById('empPassword').required = true;
+  document.getElementById('passHint').textContent = '(mínimo 8 caracteres)';
+  document.getElementById('btnGuardarEmp').innerHTML = '<i class="bi bi-person-plus me-2"></i>Crear empleado';
+  document.getElementById('formEmpleado').action = '{% url "gerente:empleados_nuevo" %}';
+});
+</script>
+{% endblock %}
