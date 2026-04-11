@@ -1,0 +1,313 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+
+{% block title %}Reportes{% endblock %}
+{% block page_title %}Reportes{% endblock %}
+
+{% block sidebar_nav %}
+<a href="{% url 'gerente:dashboard' %}"><i class="bi bi-speedometer2"></i> Dashboard</a>
+<div class="nav-section-label">Reportes</div>
+<a href="{% url 'gerente:reportes' %}" class="active"><i class="bi bi-bar-chart-fill"></i> Ventas</a>
+<a href="{% url 'gerente:auditoria' %}"><i class="bi bi-shield-check"></i> Auditoría</a>
+{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+
+<!-- Period selector -->
+<div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
+  <div class="d-flex gap-1">
+    {% for periodo, label in periodos %}
+    <a href="?periodo={{ periodo }}"
+       class="btn btn-sm rounded-pill px-3
+              {% if periodo_actual == periodo %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+       style="font-size:.78rem;">
+      {{ label }}
+    </a>
+    {% endfor %}
+  </div>
+  <div class="ms-auto d-flex gap-2 align-items-center">
+    <form method="get" class="d-flex gap-2 align-items-center">
+      <input type="date" name="desde" value="{{ desde }}"
+             class="form-control form-control-sm rounded-3" style="max-width:140px;">
+      <span class="text-muted-mm" style="font-size:.8rem;">a</span>
+      <input type="date" name="hasta" value="{{ hasta }}"
+             class="form-control form-control-sm rounded-3" style="max-width:140px;">
+      <button type="submit" class="btn btn-primary btn-sm rounded-pill px-3">Filtrar</button>
+    </form>
+    <a href="?periodo={{ periodo_actual }}&export=csv"
+       class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+      <i class="bi bi-download me-1"></i>CSV
+    </a>
+  </div>
+</div>
+
+<!-- Summary stats -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-value">${{ resumen.total_ventas|floatformat:2 }}</div>
+      <div class="stat-label">Total ventas</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-value">{{ resumen.total_pedidos }}</div>
+      <div class="stat-label">Pedidos</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-value">${{ resumen.ticket_promedio|floatformat:2 }}</div>
+      <div class="stat-label">Ticket promedio</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-value">{{ resumen.total_clientes }}</div>
+      <div class="stat-label">Clientes</div>
+    </div>
+  </div>
+</div>
+
+<!-- Report tabs -->
+<ul class="nav nav-tabs border-0 mb-3 gap-1" id="reportTabs">
+  <li class="nav-item">
+    <button class="nav-link active rounded-3" data-bs-toggle="tab" data-bs-target="#tabVentas"
+            style="font-size:.82rem; font-weight:600;">
+      <i class="bi bi-graph-up me-1"></i>Ventas
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link rounded-3" data-bs-toggle="tab" data-bs-target="#tabProductos"
+            style="font-size:.82rem; font-weight:600;">
+      <i class="bi bi-basket me-1"></i>Productos
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link rounded-3" data-bs-toggle="tab" data-bs-target="#tabAfluencia"
+            style="font-size:.82rem; font-weight:600;">
+      <i class="bi bi-people me-1"></i>Afluencia
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link rounded-3" data-bs-toggle="tab" data-bs-target="#tabTiempos"
+            style="font-size:.82rem; font-weight:600;">
+      <i class="bi bi-stopwatch me-1"></i>Tiempos
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content">
+
+  <!-- Tab: Ventas -->
+  <div class="tab-pane fade show active" id="tabVentas">
+    <div class="row g-3">
+      <div class="col-12 col-xl-8">
+        <div class="card border-0">
+          <div class="card-header bg-white border-bottom py-2 px-3">
+            <span class="fw-bold" style="font-size:.875rem;">Ventas por día</span>
+          </div>
+          <div class="card-body" style="height:280px;">
+            <canvas id="chartVentas"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-4">
+        <div class="card border-0">
+          <div class="card-header bg-white border-bottom py-2 px-3">
+            <span class="fw-bold" style="font-size:.875rem;">Por método de pago</span>
+          </div>
+          <div class="card-body" style="height:280px; display:flex; align-items:center;">
+            <canvas id="chartMetodos"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detailed table -->
+    <div class="card border-0 mt-3">
+      <div class="card-header bg-white border-bottom py-2 px-3">
+        <span class="fw-bold" style="font-size:.875rem;">Detalle por día</span>
+      </div>
+      <div class="card-body p-0">
+        <table class="table data-table mb-0">
+          <thead>
+            <tr>
+              <th class="ps-3">Fecha</th>
+              <th>Pedidos</th>
+              <th>Clientes</th>
+              <th>Total</th>
+              <th>Ticket promedio</th>
+              <th>Descuentos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for dia in ventas_por_dia %}
+            <tr>
+              <td class="ps-3 fw-semibold">{{ dia.fecha|date:"d/m/Y" }}</td>
+              <td>{{ dia.pedidos }}</td>
+              <td>{{ dia.clientes }}</td>
+              <td class="fw-semibold" style="color:var(--mm-green);">${{ dia.total|floatformat:2 }}</td>
+              <td>${{ dia.ticket|floatformat:2 }}</td>
+              <td class="text-danger">-${{ dia.descuentos|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted-mm py-4">Sin datos para el período.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Productos más vendidos -->
+  <div class="tab-pane fade" id="tabProductos">
+    <div class="card border-0">
+      <div class="card-body p-0">
+        <table class="table data-table mb-0">
+          <thead>
+            <tr>
+              <th class="ps-3" style="width:40px;">#</th>
+              <th>Producto</th>
+              <th>Categoría</th>
+              <th>Unidades</th>
+              <th>Ingreso</th>
+              <th>% del total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for prod in top_productos %}
+            <tr>
+              <td class="ps-3 fw-bold text-muted-mm">{{ forloop.counter }}</td>
+              <td class="fw-semibold" style="font-size:.875rem;">{{ prod.nombre }}</td>
+              <td>
+                <span class="badge rounded-pill" style="background:var(--mm-green-pale);color:var(--mm-green);font-size:.7rem;">
+                  {{ prod.categoria }}
+                </span>
+              </td>
+              <td>{{ prod.unidades }}</td>
+              <td class="fw-semibold" style="color:var(--mm-green);">${{ prod.ingreso|floatformat:2 }}</td>
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  <div class="progress flex-grow-1" style="height:6px; border-radius:99px;">
+                    <div class="progress-bar" style="width:{{ prod.pct }}%; background:var(--mm-green);"></div>
+                  </div>
+                  <span style="font-size:.75rem; min-width:32px;">{{ prod.pct|floatformat:1 }}%</span>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted-mm py-4">Sin datos.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Afluencia -->
+  <div class="tab-pane fade" id="tabAfluencia">
+    <div class="card border-0">
+      <div class="card-header bg-white border-bottom py-2 px-3">
+        <span class="fw-bold" style="font-size:.875rem;">Clientes por hora del día</span>
+      </div>
+      <div class="card-body" style="height:300px;">
+        <canvas id="chartAfluencia"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Tiempos -->
+  <div class="tab-pane fade" id="tabTiempos">
+    <div class="row g-3">
+      {% for stat in tiempos %}
+      <div class="col-6 col-md-3">
+        <div class="stat-card text-center">
+          <div class="stat-value" style="font-size:1.5rem;">{{ stat.valor }} min</div>
+          <div class="stat-label">{{ stat.label }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div><!-- /tab-content -->
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Ventas chart
+const ctxV = document.getElementById('chartVentas').getContext('2d');
+new Chart(ctxV, {
+  type: 'bar',
+  data: {
+    labels: {{ labels_ventas|safe }},
+    datasets: [{
+      label: 'Ventas ($)',
+      data: {{ data_ventas|safe }},
+      backgroundColor: 'rgba(61,107,79,.75)',
+      borderColor: 'rgba(61,107,79,1)',
+      borderWidth: 1, borderRadius: 4
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { beginAtZero: true, ticks: { font: { size: 11 } } },
+      x: { ticks: { font: { size: 11 } } }
+    }
+  }
+});
+
+// Métodos pago donut
+const ctxM = document.getElementById('chartMetodos').getContext('2d');
+new Chart(ctxM, {
+  type: 'doughnut',
+  data: {
+    labels: {{ labels_metodos|safe }},
+    datasets: [{
+      data: {{ data_metodos|safe }},
+      backgroundColor: ['#3D6B4F','#C9933A','#1A6A8A','#7C3AED'],
+      borderWidth: 0
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } }
+    },
+    cutout: '65%'
+  }
+});
+
+// Afluencia chart
+const ctxA = document.getElementById('chartAfluencia').getContext('2d');
+new Chart(ctxA, {
+  type: 'line',
+  data: {
+    labels: {{ labels_afluencia|safe }},
+    datasets: [{
+      label: 'Clientes',
+      data: {{ data_afluencia|safe }},
+      borderColor: 'rgba(61,107,79,1)',
+      backgroundColor: 'rgba(61,107,79,.1)',
+      fill: true, tension: 0.3, pointRadius: 3
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { beginAtZero: true, ticks: { font: { size: 11 } } },
+      x: { ticks: { font: { size: 11 } } }
+    }
+  }
+});
+</script>
+{% endblock %}

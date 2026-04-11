@@ -1,0 +1,225 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+
+{% block title %}Productos{% endblock %}
+{% block page_title %}Productos{% endblock %}
+
+{% block sidebar_nav %}
+<a href="{% url 'gerente:dashboard' %}"><i class="bi bi-speedometer2"></i> Dashboard</a>
+<div class="nav-section-label">Menú</div>
+<a href="{% url 'gerente:categorias' %}"><i class="bi bi-tags-fill"></i> Categorías</a>
+<a href="{% url 'gerente:productos' %}" class="active"><i class="bi bi-basket-fill"></i> Productos</a>
+<a href="{% url 'gerente:modificadores' %}"><i class="bi bi-sliders"></i> Modificadores</a>
+<a href="{% url 'gerente:promociones' %}"><i class="bi bi-percent"></i> Promociones</a>
+<div class="nav-section-label">Gestión</div>
+<a href="{% url 'gerente:empleados' %}"><i class="bi bi-people-fill"></i> Empleados</a>
+<a href="{% url 'gerente:reportes' %}"><i class="bi bi-bar-chart-fill"></i> Reportes</a>
+{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'gerente:productos_nuevo' %}" class="btn btn-primary btn-sm rounded-pill px-3">
+  <i class="bi bi-plus me-1"></i>Nuevo producto
+</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filters -->
+<div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+  <input type="text" class="form-control form-control-sm rounded-pill" style="max-width:220px;"
+         placeholder="🔍  Buscar producto…" id="searchInput" oninput="filterTable()">
+  <select class="form-select form-select-sm rounded-pill" style="max-width:160px;"
+          id="catFilter" onchange="filterTable()">
+    <option value="">Todas las categorías</option>
+    {% for cat in categorias %}
+    <option value="{{ cat.nombre }}">{{ cat.nombre }}</option>
+    {% endfor %}
+  </select>
+  <select class="form-select form-select-sm rounded-pill" style="max-width:140px;"
+          id="dispFilter" onchange="filterTable()">
+    <option value="">Todo</option>
+    <option value="disponible">Disponibles</option>
+    <option value="agotado">Agotados</option>
+  </select>
+  <span class="ms-auto text-muted-mm" style="font-size:.78rem;" id="countLabel">
+    {{ productos|length }} producto(s)
+  </span>
+</div>
+
+<!-- Products Table -->
+<div class="card border-0">
+  <div class="card-body p-0">
+    <table class="table data-table mb-0" id="productTable">
+      <thead>
+        <tr>
+          <th class="ps-3" style="width:56px;">Img</th>
+          <th>Nombre</th>
+          <th>Categoría</th>
+          <th>Precio</th>
+          <th>Modificadores</th>
+          <th>Disponible</th>
+          <th class="text-end pe-3">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for prod in productos %}
+        <tr class="prod-row"
+            data-nombre="{{ prod.nombre|lower }}"
+            data-cat="{{ prod.categoria.nombre }}"
+            data-disp="{{ prod.disponible|yesno:'disponible,agotado' }}">
+
+          <td class="ps-3">
+            {% if prod.imagen_url %}
+            <img src="{{ prod.imagen_url }}" alt="{{ prod.nombre }}"
+                 style="width:40px;height:40px;object-fit:cover;border-radius:var(--radius-sm);">
+            {% else %}
+            <div style="width:40px;height:40px;background:var(--mm-cream-dark);
+                        border-radius:var(--radius-sm);display:flex;align-items:center;
+                        justify-content:center;font-size:1.1rem;">🍽️</div>
+            {% endif %}
+          </td>
+
+          <td>
+            <div class="fw-semibold" style="font-size:.875rem;">{{ prod.nombre }}</div>
+            {% if prod.descripcion %}
+            <div class="text-muted-mm" style="font-size:.72rem; max-width:220px;
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              {{ prod.descripcion }}
+            </div>
+            {% endif %}
+          </td>
+
+          <td>
+            <span class="badge rounded-pill" style="background:var(--mm-green-pale);
+                  color:var(--mm-green); font-size:.72rem;">
+              {{ prod.categoria.nombre }}
+            </span>
+          </td>
+
+          <td class="fw-semibold" style="color:var(--mm-green);">${{ prod.precio }}</td>
+
+          <td>
+            {% with count=prod.grupos_modificadores.count %}
+            {% if count > 0 %}
+            <span class="badge rounded-pill" style="background:var(--mm-gold-pale);
+                  color:var(--mm-gold); font-size:.7rem;">
+              {{ count }} grupo{{ count|pluralize }}
+            </span>
+            {% else %}
+            <span class="text-muted-mm" style="font-size:.78rem;">—</span>
+            {% endif %}
+            {% endwith %}
+          </td>
+
+          <td>
+            <!-- Toggle availability -->
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox"
+                     {% if prod.disponible %}checked{% endif %}
+                     onchange="toggleDisponible({{ prod.id }}, this.checked)"
+                     style="cursor:pointer;">
+            </div>
+          </td>
+
+          <td class="text-end pe-3">
+            <div class="d-flex justify-content-end gap-1">
+              <a href="{% url 'gerente:producto_editar' prod.id %}"
+                 class="btn btn-sm btn-outline-secondary rounded-2 px-2"
+                 style="font-size:.75rem;" title="Editar">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <button class="btn btn-sm btn-outline-danger rounded-2 px-2"
+                      style="font-size:.75rem;" title="Desactivar"
+                      onclick="confirmarDesactivar({{ prod.id }}, '{{ prod.nombre|escapejs }}')">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </div>
+          </td>
+
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-center text-muted-mm py-5">
+            No hay productos. <a href="{% url 'gerente:productos_nuevo' %}">Crear el primero</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Delete confirm modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:360px;">
+    <div class="modal-content border-0 rounded-4 mx-3">
+      <div class="modal-body p-4 text-center">
+        <div style="font-size:2.5rem; margin-bottom:.75rem;">⚠️</div>
+        <h6 class="fw-bold mb-1">¿Desactivar producto?</h6>
+        <p class="text-muted-mm mb-3" style="font-size:.85rem;">
+          "<span id="deleteProductName"></span>" dejará de mostrarse en el menú.
+        </p>
+        <div class="d-flex gap-2 justify-content-center">
+          <button class="btn btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">
+            Cancelar
+          </button>
+          <button class="btn btn-danger rounded-pill px-3" id="btnConfirmDelete">
+            Desactivar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF = getCsrf();
+let deleteId = null;
+
+function filterTable() {
+  const q   = document.getElementById('searchInput').value.toLowerCase();
+  const cat = document.getElementById('catFilter').value;
+  const dis = document.getElementById('dispFilter').value;
+  let count = 0;
+  document.querySelectorAll('.prod-row').forEach(row => {
+    const show = (!q || row.dataset.nombre.includes(q))
+              && (!cat || row.dataset.cat === cat)
+              && (!dis || row.dataset.disp === dis);
+    row.style.display = show ? '' : 'none';
+    if (show) count++;
+  });
+  document.getElementById('countLabel').textContent = `${count} producto(s)`;
+}
+
+function toggleDisponible(prodId, disponible) {
+  fetch(`/gerente/productos/${prodId}/editar/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ disponible })
+  }).then(r => r.json()).then(d => {
+    showToast(disponible ? 'Producto disponible' : 'Producto marcado agotado',
+              disponible ? 'success' : 'warning');
+  });
+}
+
+function confirmarDesactivar(id, nombre) {
+  deleteId = id;
+  document.getElementById('deleteProductName').textContent = nombre;
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+document.getElementById('btnConfirmDelete').addEventListener('click', () => {
+  if (!deleteId) return;
+  fetch(`/gerente/productos/${deleteId}/editar/`, {
+    method: 'DELETE',
+    headers: { 'X-CSRFToken': CSRF }
+  }).then(r => r.json()).then(() => {
+    bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+    location.reload();
+  });
+});
+</script>
+{% endblock %}
