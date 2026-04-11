@@ -1,22 +1,34 @@
 """
-URL configuration for config project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.0/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+mochi_matcha — URL Configuration
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
+from django.views.generic import RedirectView
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    # Raíz → bienvenida
+    path("", RedirectView.as_view(url="/bienvenida/"), name="root"),
+
+    # Django admin — solo superusuarios en mantenimiento
+    path("admin/", admin.site.urls),
+
+    # ── Cuentas (logout compartido del staff) ──────────────────────────
+    path("accounts/", include("accounts.urls")),
+
+    # ── Módulo cliente (sin autenticación Django; usa cookie propia) ──
+    # Acceso: /  →  /bienvenida/?mesa=5
+    #          /menu/, /carrito/, /pedidos/, etc.
+    path("", include("cliente.urls")),
+
+    # ── Módulo mesero ──────────────────────────────────────────────────
+    # Acceso: /mesero/login/  →  /mesero/mesas/
+    path("mesero/", include("mesero.urls")),
+
+    # ── Módulo cocina (KDS) ────────────────────────────────────────────
+    # Acceso: /cocina/login/  →  /cocina/kds/?area=cocina
+    path("cocina/", include("cocina.urls")),
+
+    # ── Módulo gerente / admin ────────────────────────────────────────
+    # Acceso: /gerente/login/  →  /gerente/dashboard/
+    path("gerente/", include("gerente.urls")),
 ]
