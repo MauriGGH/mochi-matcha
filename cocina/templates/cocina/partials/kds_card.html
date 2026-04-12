@@ -1,0 +1,49 @@
+{% load static %}
+<div class="kds-card" id="kds-card-{{ pedido.id }}"
+     data-ts="{{ pedido.fecha_hora_ingreso|date:'U' }}">
+
+  <div class="kds-card-header">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <span class="kds-table-badge">Mesa {{ pedido.sesion.mesa.numero_mesa }}</span>
+      <span style="font-size:.72rem; color:#888;">{{ pedido.sesion.alias }}</span>
+      {% if pedido.modalidad.descripcion != 'QR' %}
+      <span style="font-size:.65rem; background:#2a2a2a; color:#aaa;
+                   border-radius:4px; padding:1px 5px;">{{ pedido.modalidad.descripcion }}</span>
+      {% endif %}
+    </div>
+    {% if not done %}
+    <span class="kds-timer green" data-timer>00:00</span>
+    {% else %}
+    <span style="font-size:.72rem; color:var(--kds-green);">
+      <i class="bi bi-check2-all me-1"></i>Listo
+    </span>
+    {% endif %}
+  </div>
+
+  <div class="kds-items">
+    {% for det in pedido.detalles.all %}
+    <div class="kds-item">
+      <div>
+        <span class="kds-item-qty">{{ det.cantidad }}×</span>{{ det.producto.nombre }}
+        {% if det.modificadores.all %}
+        <div class="kds-item-mods">
+          {% for mod in det.modificadores.all %}
+            {{ mod.opcion.nombre_opcion }}{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if det.notas %}
+        <div class="kds-item-notes">📝 {{ det.notas }}</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if not done %}
+  <button class="btn-listo" onclick="marcarListo({{ pedido.id }})">
+    <i class="bi bi-check2-circle me-2"></i>¡Listo!
+  </button>
+  {% endif %}
+
+</div>
