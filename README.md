@@ -1,6 +1,5 @@
 <div align="center">
 
-
 # 🍵 Mochi Matcha
 
 ### Sistema de Gestión de Pedidos para Cafetería
@@ -9,11 +8,11 @@
 
 <br/>
 
-[![React](https://img.shields.io/badge/React_18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript_5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_3-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![PHP](https://img.shields.io/badge/PHP_8-777BB4?style=for-the-badge&logo=php&logoColor=white)](https://www.php.net/)
+[![Django](https://img.shields.io/badge/Django_5-092E20?style=for-the-badge&logo=django&logoColor=white)](https://www.djangoproject.com/)
+[![Python](https://img.shields.io/badge/Python_3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Bootstrap](https://img.shields.io/badge/Bootstrap_5-7952B3?style=for-the-badge&logo=bootstrap&logoColor=white)](https://getbootstrap.com/)
 [![MySQL](https://img.shields.io/badge/MySQL_8-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://www.mysql.com/)
+[![JavaScript](https://img.shields.io/badge/JavaScript_Vanilla-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/es/docs/Web/JavaScript)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
 
 </div>
@@ -41,26 +40,24 @@
 ---
 
 ## 🏗️ Arquitectura
+      ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐
+      │ 📱 Cliente │ │ 🧑 Mesero  │ │ 🍳 Cocina  │ │ 💼 Gerente │
+      │   (móvil)  │    (tablet)  │ │     KDS    │ │   (admin)  │
+      └─────┬──────┘ └─────┬──────┘ └─────┬──────┘ └─────┬──────┘
+            │              │              │              │
+            └──────────────┴──────────────┴──────────────┘
+                                    │
+                        ┌───────────▼───────────┐
+                        │       Django 5        │
+                        │      (Python 3.11)    │
+                        └───────────┬───────────┘
+                        
+                        ┌───────────▼───────────┐
+                        │     MySQL / MariaDB   │
+                        └───────────────────────┘
 
-```
-┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐
-│  📱 Cliente │   │ 🧑 Mesero  │   │ 🍳 Cocina  │   │ 💼 Gerente │
-│   (móvil)  │   │  (tablet)  │   │  KDS       │   │  (admin)   │
-└─────┬──────┘   └─────┬──────┘   └─────┬──────┘   └─────┬──────┘
-      │                │                │                 │
-      └────────────────┴────────────────┴─────────────────┘
-                                │
-                    ┌───────────▼───────────┐
-                    │     API REST (PHP 8)   │
-                    └───────────┬───────────┘
-                                │
-                    ┌───────────▼───────────┐
-                    │   MySQL / MariaDB      │
-                    └───────────────────────┘
-```
-
-**Frontend:** Bootstrap, html, css — diseño responsive, polling cada 3s  
-**Backend:** PHP, django  — Laravel 
+**Frontend:** Django Templates + Bootstrap 5 — diseño responsive, polling con JavaScript vanilla  
+**Backend:** Django 5 (Python 3.11) — autenticación dual (clientes vía cookie, staff vía sesión Django)  
 **Base de datos:** MySQL 8.0 / MariaDB
 
 ---
@@ -123,7 +120,7 @@
 
 | Tabla | Descripción |
 |---|---|
-| `Empleado` | Personal del sistema con roles y credenciales |
+| `Empleado` | Personal del sistema con roles y credenciales (hereda de AbstractBaseUser) |
 | `Mesa` | Mesas físicas, QR, PIN dinámico y estado |
 | `SesionCliente` | Sesión de cada comensal (alias, token, estado) |
 | `Producto` / `Categoria` | Catálogo del menú |
@@ -133,7 +130,41 @@
 | `SolicitudPago` | Solicitudes de cuenta individuales o grupales |
 | `Auditoria` | Registro de acciones críticas del sistema |
 
-> El esquema completo con relaciones y restricciones está en `database/mochi_matcha.sql`.
+> El esquema completo con relaciones y restricciones está definido en los modelos de Django (`models.py` de cada app).
+
+---
+
+## 🚀 Tecnologías utilizadas
+
+| Categoría | Tecnología |
+|-----------|------------|
+| **Backend** | Django 5.0 (Python 3.11) |
+| **Base de datos** | MySQL 8 / MariaDB |
+| **Frontend** | Django Templates, Bootstrap 5, Bootstrap Icons |
+| **Estilos** | CSS personalizado (variables, diseño responsive) |
+| **JavaScript** | Vanilla JS (fetch, polling, manipulación del DOM) |
+| **Gráficas** | Chart.js 4 (solo en panel de reportes) |
+| **Servidor** | Gunicorn + Nginx (producción) |
+
+---
+
+## 📁 Estructura del proyecto
+      mochi-matcha/
+      ├── config/ # Configuración de Django (settings, urls raíz)
+      ├── accounts/ # Modelo Empleado, autenticación, decoradores
+      ├── catalogs/ # Catálogos simples (ModalidadIngreso, MetodoPago, etc.)
+      ├── menu/ # Productos, Categorías, Modificadores, Promociones
+      ├── mesas/ # Modelos Mesa y SesionCliente
+      ├── pedidos/ # Pedido, DetallePedido, SolicitudPago
+      ├── auditoria/ # Registro de acciones críticas
+      ├── cliente/ # Vistas y templates del módulo cliente (móvil)
+      ├── mesero/ # Vistas y templates del módulo mesero
+      ├── cocina/ # Vistas y templates del módulo cocina (KDS)
+      ├── gerente/ # Vistas y templates del módulo gerente/admin
+      ├── static/ # CSS, JS globales (mochi.css, staff.css, cliente.css)
+      ├── templates/ # Plantillas base (base/cliente_base.html, staff_base.html, login.html)
+      └── media/ # Imágenes subidas (productos, QR)
+
 
 ---
 
