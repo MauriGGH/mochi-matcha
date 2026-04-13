@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#3D6B4F">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>{% block title %}Mochi Matcha{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  {% load static %}
+  <link href="{% static 'css/mochi.css' %}" rel="stylesheet">
+  <link href="{% static 'css/cliente.css' %}" rel="stylesheet">
+  <style>
+    html, body { height: 100%; }
+    body {
+      background: #2A4A36;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+    #client-shell {
+      width: 100%;
+      max-width: 430px;
+      min-height: 100vh;
+      background: var(--mm-cream);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+    #client-content {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 80px;
+    }
+    /* Toast styles */
+    .mm-toast-container { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: .5rem; align-items: center; pointer-events: none; }
+    .mm-toast { background: #1C2A1E; color: #fff; border-radius: var(--radius-pill); padding: .6rem 1.25rem; font-size: .875rem; font-weight: 500; box-shadow: var(--shadow-lg); opacity: 1; transition: opacity .3s; white-space: nowrap; }
+    .mm-toast.success { background: var(--mm-success); }
+    .mm-toast.error   { background: var(--mm-danger); }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<div id="client-shell">
+
+  {% block client_header %}
+  <header class="px-3 py-3 d-flex align-items-center justify-content-between"
+          style="background:var(--mm-white); border-bottom:1px solid var(--mm-border); position:sticky; top:0; z-index:50;">
+    <span class="fw-semibold" style="font-size:1rem; color:var(--mm-green); font-family:var(--font-display);">🍵 Mochi Matcha</span>
+    <div class="d-flex align-items-center gap-2">
+      {% if request.sesion_cliente %}
+      <span class="badge rounded-pill" style="background:var(--mm-green-pale); color:var(--mm-green); font-size:.75rem;">
+        <i class="bi bi-person-fill me-1"></i>{{ request.sesion_cliente.alias }}
+      </span>
+      {% endif %}
+      {% block header_right %}{% endblock %}
+    </div>
+  </header>
+  {% endblock %}
+
+  <main id="client-content">
+    {% if messages %}
+    <div class="px-3 pt-2">
+      {% for msg in messages %}
+      <div class="alert alert-{{ msg.tags }} alert-dismissible fade show rounded-3 py-2 px-3" role="alert" style="font-size:.875rem;">
+        {{ msg }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block bottom_nav %}
+  {% if request.sesion_cliente %}
+  <nav class="client-bottom-nav">
+    <a href="{% url 'cliente:menu' %}"
+       class="nav-item {% if request.resolver_match.url_name == 'menu' %}active{% endif %}">
+      <i class="bi bi-grid-fill"></i>
+      <span>Menú</span>
+    </a>
+    <a href="{% url 'cliente:carrito' %}"
+       class="nav-item {% if request.resolver_match.url_name == 'carrito' %}active{% endif %}">
+      <i class="bi bi-bag-fill"></i>
+      <span>Carrito</span>
+      {% if request.carrito_count > 0 %}
+      <span class="nav-badge">{{ request.carrito_count }}</span>
+      {% endif %}
+    </a>
+    <a href="{% url 'cliente:pedidos' %}"
+       class="nav-item {% if request.resolver_match.url_name == 'pedidos' %}active{% endif %}">
+      <i class="bi bi-receipt"></i>
+      <span>Pedidos</span>
+    </a>
+    <a href="{% url 'cliente:pedidos' %}"
+       class="nav-item" onclick="solicitarAyudaGlobal(event)">
+      <i class="bi bi-bell-fill"></i>
+      <span>Ayuda</span>
+    </a>
+  </nav>
+  {% endif %}
+  {% endblock %}
+
+</div>
+
+<div class="mm-toast-container" id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function showToast(msg, type='') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = `mm-toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; setTimeout(()=>t.remove(), 300); }, 3000);
+}
+function getCsrf() {
+  return document.cookie.split(';').find(c=>c.trim().startsWith('csrftoken='))?.split('=')[1] || '';
+}
+async function solicitarAyudaGlobal(e) {
+  e.preventDefault();
+  try {
+    await fetch('{% url "cliente:solicitar_ayuda" %}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      body: '{}'
+    });
+    showToast('Mesero notificado 🔔', 'success');
+  } catch(err) { showToast('Error al notificar', 'error'); }
+}
+</script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

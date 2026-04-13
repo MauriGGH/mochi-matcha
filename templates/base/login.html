@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acceso — {{ rol_display }} · Mochi Matcha</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  {% load static %}
+  <link href="{% static 'css/mochi.css' %}" rel="stylesheet">
+  <style>
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, var(--mm-green-dark) 0%, var(--mm-green) 60%, #5A8F6B 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-body); padding: 1rem;
+    }
+    .login-card {
+      background: var(--mm-white);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-lg);
+      padding: 2.5rem 2rem;
+      width: 100%; max-width: 380px;
+    }
+    .login-icon {
+      width: 68px; height: 68px;
+      border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.9rem; margin: 0 auto 1.25rem;
+    }
+    .form-control:focus { border-color: var(--mm-green); box-shadow: 0 0 0 .2rem rgba(61,107,79,.15); }
+    .form-control { border-radius: var(--radius-sm); padding: .65rem .9rem; border-color: var(--mm-border); }
+    .demo-badge {
+      display: inline-flex; align-items: center; gap: .35rem;
+      background: var(--mm-cream-dark); border-radius: var(--radius-pill);
+      padding: .3rem .75rem; font-size: .75rem; color: var(--mm-text-muted);
+      margin-top: 1.25rem; cursor: pointer; transition: background .15s;
+    }
+    .demo-badge:hover { background: var(--mm-green-pale); color: var(--mm-green); }
+    .demo-badge code { font-family: var(--font-mono); font-size: .75rem; font-style: normal; }
+  </style>
+</head>
+<body>
+
+<div class="login-card">
+
+  <div class="login-icon"
+       style="{% if rol == 'mesero' %}background:var(--mm-green-pale);{% elif rol == 'gerente' %}background:var(--mm-gold-pale);{% elif rol == 'cocina' %}background:#FEF3E7;{% else %}background:#EBF5FB;{% endif %}">
+    {% if rol == 'mesero' %}🧑‍🍳
+    {% elif rol == 'gerente' %}💼
+    {% elif rol == 'cocina' %}🍳
+    {% else %}🍵{% endif %}
+  </div>
+
+  <h4 class="fw-bold text-center mb-1">{{ rol_display }}</h4>
+  <p class="text-center mb-4" style="font-size:.85rem; color:var(--mm-text-muted);">Ingresa tus credenciales para continuar</p>
+
+  {% if error %}
+  <div class="alert alert-danger rounded-3 py-2 px-3 mb-3" style="font-size:.85rem;">
+    <i class="bi bi-exclamation-triangle me-1"></i>{{ error }}
+  </div>
+  {% endif %}
+
+  <form method="post" action="{{ form_action }}">
+    {% csrf_token %}
+    <div class="mb-3">
+      <label class="form-label fw-semibold" style="font-size:.85rem;">Usuario</label>
+      <div class="input-group">
+        <span class="input-group-text" style="background:var(--mm-cream); border-color:var(--mm-border);">
+          <i class="bi bi-person text-muted"></i>
+        </span>
+        <input type="text" name="usuario" id="usuarioInput" class="form-control" required
+               placeholder="Tu usuario" autocomplete="username"
+               value="{{ usuario_previo|default:'' }}"
+               style="border-left:none;">
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <label class="form-label fw-semibold" style="font-size:.85rem;">Contraseña</label>
+      <div class="input-group">
+        <span class="input-group-text" style="background:var(--mm-cream); border-color:var(--mm-border);">
+          <i class="bi bi-lock text-muted"></i>
+        </span>
+        <input type="password" name="contrasena" id="passInput" class="form-control" required
+               placeholder="••••••••" autocomplete="current-password"
+               style="border-left:none; border-right:none;">
+        <button type="button" class="input-group-text btn"
+                style="background:var(--mm-cream); border-color:var(--mm-border); cursor:pointer;"
+                onclick="togglePass()">
+          <i class="bi bi-eye text-muted" id="passEye"></i>
+        </button>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100 py-3" style="font-size:.95rem;">
+      <i class="bi bi-arrow-right-circle me-2"></i>Iniciar sesión
+    </button>
+  </form>
+
+  <!-- Demo credentials hint -->
+  {% if rol == 'mesero' %}
+  <div class="text-center">
+    <button class="demo-badge" onclick="fillDemo('mesero1','mesero123')">
+      Demo: <code>mesero1</code> / <code>mesero123</code>
+    </button>
+  </div>
+  {% elif rol == 'gerente' %}
+  <div class="text-center">
+    <button class="demo-badge" onclick="fillDemo('gerente1','gerente123')">
+      Demo: <code>gerente1</code> / <code>gerente123</code>
+    </button>
+  </div>
+  {% elif rol == 'cocina' %}
+  <div class="text-center">
+    <button class="demo-badge" onclick="fillDemo('cocina1','cocina123')">
+      Demo: <code>cocina1</code> / <code>cocina123</code>
+    </button>
+  </div>
+  {% endif %}
+
+  <p class="text-center mt-4 mb-0" style="font-size:.75rem; color:var(--mm-text-muted);">
+    🍵 Mochi Matcha · Sistema de pedidos
+  </p>
+</div>
+
+<script>
+function togglePass() {
+  const i = document.getElementById('passInput');
+  const e = document.getElementById('passEye');
+  i.type = i.type === 'password' ? 'text' : 'password';
+  e.className = i.type === 'password' ? 'bi bi-eye text-muted' : 'bi bi-eye-slash text-muted';
+}
+function fillDemo(user, pass) {
+  document.getElementById('usuarioInput').value = user;
+  document.getElementById('passInput').value = pass;
+  document.getElementById('passInput').type = 'text';
+  document.getElementById('passEye').className = 'bi bi-eye-slash text-muted';
+}
+</script>
+</body>
+</html>
