@@ -59,3 +59,5 @@ def sesion_cliente_requerida(view_func):
             return redirect("/bienvenida/")
         return view_func(request, *args, **kwargs)
     return _wrapped
+
+

@@ -44,15 +44,20 @@ def logout_mesero(request):
 
 @mesero_requerido
 def mapa_mesas(request):
+    from menu.models import Categoria
     mesas = Mesa.objects.prefetch_related("sesiones").order_by("numero_mesa")
     listos_count = Pedido.objects.filter(estado="listo").count()
     solicitudes_count = SolicitudPago.objects.filter(
         estado_solicitud__descripcion="pendiente"
     ).count()
+    categorias = Categoria.objects.prefetch_related(
+        "productos__grupos_modificadores__opciones"
+    ).filter(productos__disponible=True).distinct()
     return render(request, "mesero/mapa_mesas.html", {
         "mesas": mesas,
         "listos_count": listos_count,
         "solicitudes_count": solicitudes_count,
+        "categorias": categorias,
     })
 
 

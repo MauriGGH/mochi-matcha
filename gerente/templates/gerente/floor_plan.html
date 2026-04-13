@@ -6,218 +6,147 @@
 
 {% block sidebar_nav %}
 <a href="{% url 'gerente:floor_plan' %}" class="active"><i class="bi bi-grid-fill"></i> Floor Plan</a>
-<div class="nav-section-label">Gestión de Menú</div>
-<a href="{% url 'gerente:productos' %}"><i class="bi bi-basket-fill"></i> Productos</a>
-<a href="{% url 'gerente:categorias' %}"><i class="bi bi-tags-fill"></i> Categorías</a>
-<a href="{% url 'gerente:modificadores' %}"><i class="bi bi-sliders"></i> Modificadores</a>
-<a href="{% url 'gerente:promociones' %}"><i class="bi bi-percent"></i> Promociones</a>
-<a href="{% url 'gerente:mesas_crud' %}"><i class="bi bi-table"></i> Mesas</a>
 <div class="nav-section-label">Gestión</div>
-<a href="{% url 'gerente:empleados' %}"><i class="bi bi-people-fill"></i> Empleados</a>
+<a href="{% url 'gerente:productos' %}"><i class="bi bi-basket-fill"></i> Gestión de Menú</a>
 <div class="nav-section-label">Reportes</div>
 <a href="{% url 'gerente:reportes' %}"><i class="bi bi-bar-chart-fill"></i> Reportes</a>
-<a href="{% url 'gerente:auditoria' %}"><i class="bi bi-shield-check"></i> Auditoría</a>
-<div class="nav-section-label">Sistema</div>
+<div class="nav-section-label">Admin</div>
+<a href="{% url 'gerente:empleados' %}"><i class="bi bi-people-fill"></i> Empleados</a>
 <a href="{% url 'gerente:configuracion' %}"><i class="bi bi-gear-fill"></i> Configuración</a>
 {% endblock %}
 
 {% block topbar_actions %}
-<span class="badge rounded-pill me-2" style="background:var(--mm-green-pale); color:var(--mm-green);">
-  <i class="bi bi-circle-fill me-1" style="font-size:.4rem;"></i>
-  <span id="mesasActivasCount">0</span> activas
-</span>
-<span class="badge rounded-pill me-2" style="background:var(--mm-gold-pale); color:var(--mm-gold);">
-  <i class="bi bi-receipt me-1"></i>
-  <span id="solicitudesCount">0</span> solicitudes
-</span>
-<button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="location.reload()">
-  <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
-</button>
-{% endblock %}
-
-{% block extra_head %}
-<style>
-  .filter-bar-gerente {
-    display: flex; gap: .5rem; margin-bottom: 1.5rem;
-    flex-wrap: wrap; align-items: center;
-  }
-  .filter-chip {
-    border: 1.5px solid var(--mm-border);
-    background: var(--mm-white);
-    color: var(--mm-text-muted);
-    border-radius: var(--radius-pill);
-    padding: .3rem .9rem;
-    font-size: .78rem; font-weight: 600;
-    cursor: pointer; transition: all .15s;
-    display: inline-flex; align-items: center; gap: .3rem;
-  }
-  .filter-chip.active {
-    background: var(--mm-green);
-    border-color: var(--mm-green);
-    color: #fff;
-  }
-  .filter-chip i { font-size: .9rem; }
-  .mesa-tile.gerente .mesa-actions {
-    position: absolute; bottom: .5rem; right: .5rem;
-    display: flex; gap: .2rem; opacity: 0; transition: opacity .2s;
-  }
-  .mesa-tile.gerente:hover .mesa-actions { opacity: 1; }
-  .action-icon {
-    background: rgba(255,255,255,.9);
-    border-radius: 50%; width: 28px; height: 28px;
-    display: flex; align-items: center; justify-content: center;
-    color: var(--mm-text); font-size: .9rem;
-    box-shadow: var(--shadow-sm); cursor: pointer;
-    border: 1px solid var(--mm-border);
-  }
-  .action-icon:hover { background: var(--mm-green); color: #fff; border-color: var(--mm-green); }
-</style>
+{% if listos_count > 0 %}
+<a href="#" class="btn btn-sm rounded-pill px-3" style="background:var(--mm-green-pale); color:var(--mm-green); font-size:.78rem; text-decoration:none;">
+  <i class="bi bi-check2-circle me-1"></i>{{ listos_count }} listos para entregar
+</a>
+{% endif %}
 {% endblock %}
 
 {% block content %}
+<div class="d-flex gap-3" style="height:calc(100vh - 56px - 3rem); overflow:hidden;">
 
-<!-- Filtros y leyenda -->
-<div class="filter-bar-gerente">
-  <span class="filter-chip active" onclick="filterMesas('todas', this)">
-    <i class="bi bi-grid"></i> Todas (<span id="totalMesas">0</span>)
-  </span>
-  <span class="filter-chip" onclick="filterMesas('libre', this)">
-    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-text-muted);"></span>
-    Libres
-  </span>
-  <span class="filter-chip" onclick="filterMesas('ocupada', this)">
-    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-green);"></span>
-    Ocupadas
-  </span>
-  <span class="filter-chip" onclick="filterMesas('cocina', this)">
-    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-info);"></span>
-    En cocina
-  </span>
-  <span class="filter-chip" onclick="filterMesas('listo', this)">
-    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-success);"></span>
-    Listo
-  </span>
-  <span class="filter-chip" onclick="filterMesas('cobrando', this)">
-    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-gold);"></span>
-    Cobrando
-  </span>
-  <span class="filter-chip" onclick="filterMesas('solicitud', this)">
-    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mm-danger);"></span>
-    Solicitud
-  </span>
-</div>
-
-<!-- Grid de mesas -->
-<div class="table-grid" id="mesaGrid">
-  {% for mesa in mesas %}
-  <div class="mesa-tile gerente {{ mesa.estado }}"
-       data-id="{{ mesa.id }}"
-       data-numero="{{ mesa.numero_mesa }}"
-       data-estado="{{ mesa.estado }}"
-       data-pin="{{ mesa.pin_actual|default:'' }}"
-       data-sesiones="{{ mesa.sesiones_activas_count|default:0 }}"
-       data-solicitud="{{ mesa.tiene_solicitud|yesno:'true,false' }}"
-       data-listos="{{ mesa.pedidos_listos_count|default:0 }}"
-       data-cocina="{{ mesa.pedidos_cocina_count|default:0 }}">
-
-    <div class="mesa-dot"></div>
-    <div class="mesa-num">{{ mesa.numero_mesa }}</div>
-    <div class="mesa-label">
-      {% if mesa.estado == 'libre' %}Libre
-      {% elif mesa.tiene_solicitud %}Solicitud
-      {% elif mesa.pedidos_listos_count > 0 %}¡Listo!
-      {% elif mesa.pedidos_cocina_count > 0 %}En cocina
-      {% else %}Ocupada
-      {% endif %}
-    </div>
-    {% if mesa.sesiones_activas_count %}
-    <div style="font-size:.7rem; margin-top:.2rem; color:var(--mm-text-muted);">
-      {{ mesa.sesiones_activas_count }} sesión{{ mesa.sesiones_activas_count|pluralize }}
-    </div>
-    {% endif %}
-
-    <!-- Acciones rápidas -->
-    <div class="mesa-actions">
-      <span class="action-icon" onclick="event.stopPropagation(); abrirPanel({{ mesa.id }})" title="Ver detalle">
-        <i class="bi bi-eye"></i>
-      </span>
-      <span class="action-icon" onclick="event.stopPropagation(); verPIN('{{ mesa.pin_actual|default:'—' }}')" title="Ver PIN">
-        <i class="bi bi-key"></i>
-      </span>
-      {% if mesa.estado != 'libre' %}
-      <span class="action-icon" onclick="event.stopPropagation(); confirmarCerrarMesa({{ mesa.id }})" title="Cerrar mesa">
-        <i class="bi bi-x-circle"></i>
-      </span>
-      {% endif %}
-    </div>
-  </div>
-  {% empty %}
-  <div class="col-span-full text-center py-5 text-muted-mm">
-    No hay mesas configuradas.
-  </div>
-  {% endfor %}
-</div>
-
-<!-- Panel lateral (offcanvas) -->
-<div class="offcanvas offcanvas-end" style="width:400px;" tabindex="-1" id="mesaPanel">
-  <div class="offcanvas-header border-bottom">
-    <h5 class="offcanvas-title fw-bold">
-      Mesa <span id="panelMesaNum">—</span>
-      <span class="ms-2 badge rounded-pill" id="panelPinBadge" style="background:var(--mm-green-pale); color:var(--mm-green);"></span>
-    </h5>
-    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-  </div>
-  <div class="offcanvas-body p-3" id="panelBody">
-    <div class="text-center py-4 text-muted-mm">
-      <div class="spinner-border spinner-border-sm"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Template del panel -->
-<template id="panelTemplate">
-  <div>
-    <!-- Info rápida -->
-    <div class="d-flex justify-content-between mb-3">
+  <!-- Floor Plan -->
+  <div class="flex-grow-1 overflow-y-auto">
+    <div class="d-flex align-items-center justify-content-between mb-3">
       <div>
-        <span class="fw-semibold" style="font-size:.8rem; color:var(--mm-text-muted);">PIN DE MESA</span>
-        <div class="mesa-panel-pin" id="pinDisplay" style="font-size:1.8rem; letter-spacing:.2em;">****</div>
+        <h5 class="fw-bold mb-0">Floor Plan</h5>
+        <p style="font-size:.8rem; color:var(--mm-text-muted); margin-bottom:0;" id="mesasSummary">Cargando…</p>
       </div>
-      <div class="text-end">
-        <span class="fw-semibold" style="font-size:.8rem; color:var(--mm-text-muted);">TOTAL</span>
-        <div class="fw-bold" style="font-size:1.5rem; color:var(--mm-green);" id="totalMesaDisplay">$0.00</div>
+      {% if listos_count > 0 %}
+      <span class="badge rounded-pill px-3 py-2" style="background:var(--mm-green-pale); color:var(--mm-green); font-size:.78rem;">
+        <i class="bi bi-check2-circle me-1"></i>{{ listos_count }} listos para entregar
+      </span>
+      {% endif %}
+    </div>
+
+    <!-- Legend -->
+    <div class="d-flex gap-3 mb-3 flex-wrap">
+      <span style="font-size:.75rem; color:var(--mm-text-muted); display:flex; align-items:center; gap:.35rem;"><span style="width:10px;height:10px;border-radius:50%;background:#ccc;display:inline-block;"></span>Libre</span>
+      <span style="font-size:.75rem; color:var(--mm-text-muted); display:flex; align-items:center; gap:.35rem;"><span style="width:10px;height:10px;border-radius:50%;background:var(--mm-info);display:inline-block;"></span>Ocupada</span>
+      <span style="font-size:.75rem; color:var(--mm-text-muted); display:flex; align-items:center; gap:.35rem;"><span style="width:10px;height:10px;border-radius:50%;background:var(--mm-gold);display:inline-block;"></span>En cocina</span>
+      <span style="font-size:.75rem; color:var(--mm-text-muted); display:flex; align-items:center; gap:.35rem;"><span style="width:10px;height:10px;border-radius:50%;background:var(--mm-green);display:inline-block;"></span>Cobrando</span>
+    </div>
+
+    <div class="table-grid" id="mesasGrid">
+      {% for mesa in mesas %}
+      <div class="mesa-tile libre" id="mesa-tile-{{ mesa.pk }}" onclick="selectMesa({{ mesa.pk }}, {{ mesa.numero_mesa }})">
+        <div class="mesa-dot"></div>
+        <div class="mesa-num">{{ mesa.numero_mesa }}</div>
+        <div class="mesa-label">Libre</div>
+        <div style="font-size:.65rem; color:var(--mm-text-muted); margin-top:.2rem;">
+          <i class="bi bi-people" style="font-size:.65rem;"></i> 0
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Side Panel -->
+  <div id="mesaPanel" style="width:380px; flex-shrink:0; background:var(--mm-white); border:1px solid var(--mm-border); border-radius:var(--radius-md); overflow:hidden; display:none; flex-direction:column;">
+    <div id="panelHeader" style="padding:1rem 1.25rem; border-bottom:1px solid var(--mm-border);">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <h6 class="fw-bold mb-0" id="panelTitle">Mesa —</h6>
+          <span class="badge rounded-pill mt-1" id="panelEstado" style="font-size:.7rem;"></span>
+          <span class="badge rounded-pill mt-1 ms-1" id="panelListo" style="background:var(--mm-green-pale); color:var(--mm-green); font-size:.7rem; display:none;"></span>
+        </div>
+        <button class="btn btn-link p-0" onclick="closePanel()" style="color:var(--mm-text-muted);"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="mesa-panel-pin mt-2" id="panelPin" style="display:none;"></div>
+    </div>
+
+    <div style="display:flex; border-bottom:1px solid var(--mm-border);">
+      <button class="panel-tab active" data-tab="sesiones" onclick="switchTab('sesiones')" style="flex:1; padding:.6rem; font-size:.8rem; font-weight:600; border:none; background:none; cursor:pointer; border-bottom:2px solid transparent; color:var(--mm-text-muted);">Sesiones</button>
+      <button class="panel-tab" data-tab="pedidos" onclick="switchTab('pedidos')" style="flex:1; padding:.6rem; font-size:.8rem; font-weight:600; border:none; background:none; cursor:pointer; border-bottom:2px solid transparent; color:var(--mm-text-muted);">Pedidos</button>
+      <button class="panel-tab" data-tab="solicitudes" onclick="switchTab('solicitudes')" style="flex:1; padding:.6rem; font-size:.8rem; font-weight:600; border:none; background:none; cursor:pointer; border-bottom:2px solid transparent; color:var(--mm-text-muted);">Solicitudes</button>
+      <button class="panel-tab" data-tab="resumen" onclick="switchTab('resumen')" style="flex:1; padding:.6rem; font-size:.8rem; font-weight:600; border:none; background:none; cursor:pointer; border-bottom:2px solid transparent; color:var(--mm-text-muted);">Resumen</button>
+    </div>
+
+    <div style="flex:1; overflow-y:auto; padding:1rem;" id="panelContent">
+      <div style="text-align:center; padding:2rem; color:var(--mm-text-muted);">
+        <div style="font-size:2rem;">🪑</div>
+        <p style="font-size:.85rem; margin-top:.5rem;">Selecciona una mesa</p>
       </div>
     </div>
 
-    <!-- Sesiones -->
-    <div class="mb-3">
-      <span class="fw-semibold d-block mb-2" style="font-size:.8rem; color:var(--mm-text-muted);">SESIONES ACTIVAS</span>
-      <div id="sessionList"></div>
-    </div>
-
-    <!-- Pedidos -->
-    <div class="mb-3">
-      <span class="fw-semibold d-block mb-2" style="font-size:.8rem; color:var(--mm-text-muted);">PEDIDOS</span>
-      <div id="orderList"></div>
-    </div>
-
-    <!-- Solicitudes de pago -->
-    <div class="mb-3">
-      <span class="fw-semibold d-block mb-2" style="font-size:.8rem; color:var(--mm-text-muted);">SOLICITUDES DE PAGO</span>
-      <div id="solicitudList"></div>
-    </div>
-
-    <!-- Acciones -->
-    <div class="d-grid gap-2 mt-3">
-      <button class="btn btn-outline-primary py-2" id="btnProcesarPago" onclick="irAPago()">
-        <i class="bi bi-credit-card me-2"></i>Procesar pago
-      </button>
-      <button class="btn btn-outline-danger py-2" onclick="confirmarCerrarMesa(currentMesaId)">
-        <i class="bi bi-x-circle me-2"></i>Cerrar mesa
+    <div style="padding:.75rem 1rem; border-top:1px solid var(--mm-border);">
+      <button class="btn btn-outline-danger w-100 btn-sm rounded-3" id="btnCerrarMesa" onclick="cerrarMesa()" style="display:none;">
+        <i class="bi bi-door-closed me-1"></i>Cerrar mesa
       </button>
     </div>
   </div>
-</template>
+</div>
+
+<!-- Modal: Cancelar pedido -->
+<div class="modal fade" id="cancelarModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px;">
+    <div class="modal-content rounded-4 border-0">
+      <div class="modal-body p-4">
+        <h5 class="fw-bold mb-1 text-danger"><i class="bi bi-x-circle me-2"></i>Cancelar pedido</h5>
+        <p style="font-size:.875rem; color:var(--mm-text-muted); margin-bottom:1rem;">Esta acción no se puede deshacer. Ingresa el motivo de cancelación.</p>
+        <input type="hidden" id="cancelarPedidoId">
+        <div class="mb-4">
+          <label class="form-label fw-semibold" style="font-size:.875rem;">Motivo <span class="text-danger">*</span></label>
+          <textarea id="cancelarMotivo" class="form-control rounded-3" rows="3" placeholder="ej. Cliente cambió de opinión, producto agotado…" style="border-color:var(--mm-border); font-size:.875rem; resize:none;"></textarea>
+        </div>
+        <button class="btn btn-danger w-100 py-2 fw-bold" onclick="confirmarCancelacion()">Confirmar cancelación</button>
+        <button class="btn w-100 py-2 mt-2" style="background:var(--mm-cream-dark);" data-bs-dismiss="modal">Volver</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pedido asistido modal (same as mesero) -->
+<div class="modal fade" id="asistidoModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content rounded-4 border-0">
+      <div class="modal-header border-0 pb-0">
+        <div>
+          <h5 class="modal-title fw-bold" id="asistidoTitle">Pedido asistido</h5>
+          <p class="mb-0" id="asistidoSubtitle" style="font-size:.85rem; color:var(--mm-text-muted);"></p>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <p class="text-muted" style="font-size:.875rem;">Selecciona productos para añadir al pedido de este cliente.</p>
+        <div id="asistidoProductsContainer" style="max-height:400px; overflow-y:auto;"></div>
+        <div id="asistidoCartSummary" style="display:none; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--mm-border);">
+          <h6 class="fw-bold mb-2">Resumen</h6>
+          <div id="asistidoCartItems"></div>
+          <div class="d-flex justify-content-between fw-bold mt-2">
+            <span>Total</span><span id="asistidoTotal" style="color:var(--mm-green);">$0.00</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button class="btn btn-primary px-4 py-2 fw-bold" onclick="confirmarAsistido()" id="btnConfirmarAsistido" disabled>
+          <i class="bi bi-send me-2"></i>Enviar a cocina
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 {% endblock %}
 
@@ -225,193 +154,221 @@
 <script>
 const CSRF = getCsrf();
 let currentMesaId = null;
-let mesasData = [];
+let currentTab = 'sesiones';
+let panelData = null;
+let asistidoSesionId = null;
+let asistidoCart = [];
+let menuData = null;
 
-// Cargar estado inicial
-function cargarEstadoMesas() {
-  fetch('{% url "gerente:mesas_estado" %}')
-    .then(r => r.json())
-    .then(data => {
-      mesasData = data.mesas;
-      document.getElementById('mesasActivasCount').textContent = data.mesas.filter(m => m.estado !== 'libre').length;
-      document.getElementById('solicitudesCount').textContent = data.solicitudes_count;
-      document.getElementById('totalMesas').textContent = data.mesas.length;
-      actualizarTiles();
+// Fetch menu for asistido
+async function fetchMenu() {
+  // Use products from categories already available in context via a simple JSON endpoint
+  // We use the gerente stats as proxy — for menu we rely on products rendered in asistidoProductsContainer
+  menuData = true; // flag
+}
+
+const estadoStyles = {
+  libre:    { cls:'libre',   label:'Libre',     dot:'#ccc' },
+  ocupada:  { cls:'ocupada', label:'Ocupada',   dot:'var(--mm-info)' },
+  cocina:   { cls:'pedidos', label:'En cocina', dot:'var(--mm-gold)' },
+  listo:    { cls:'ocupada', label:'Listo!',    dot:'var(--mm-green)' },
+  cobrando: { cls:'pagando', label:'Cobrando',  dot:'var(--mm-green)' },
+};
+
+async function pollMesas() {
+  try {
+    const res = await fetch('{% url "gerente:mesas_estado" %}');
+    const data = await res.json();
+    if (!data.ok) return;
+    let ocupadas = 0, libres = 0;
+    data.mesas.forEach(m => {
+      const tile = document.getElementById(`mesa-tile-${m.id}`);
+      if (!tile) return;
+      const s = estadoStyles[m.estado_visual] || estadoStyles.libre;
+      tile.className = `mesa-tile ${s.cls}`;
+      tile.querySelector('.mesa-dot').style.background = s.dot;
+      tile.querySelector('.mesa-num').textContent = m.numero;
+      tile.querySelector('.mesa-label').textContent = s.label;
+      tile.querySelector('div:last-child').innerHTML = `<i class="bi bi-people" style="font-size:.65rem;"></i> ${m.clientes}`;
+      if (m.estado_visual !== 'libre') ocupadas++; else libres++;
     });
+    document.getElementById('mesasSummary').textContent = `${ocupadas} mesas activas · ${libres} libres`;
+    if (currentMesaId) selectMesa(currentMesaId, null, true);
+  } catch(e) {}
 }
+setInterval(pollMesas, 3000);
+pollMesas();
 
-function actualizarTiles() {
-  mesasData.forEach(m => {
-    const tile = document.querySelector(`.mesa-tile[data-id="${m.id}"]`);
-    if (tile) {
-      tile.dataset.estado = m.estado_visual || m.estado;
-      tile.dataset.sesiones = m.clientes;
-      tile.dataset.solicitud = m.tiene_solicitud;
-      tile.dataset.listos = m.pedidos_listos;
-      tile.dataset.cocina = m.pedidos_cocina;
-      tile.dataset.pin = m.pin;
-      tile.className = `mesa-tile gerente ${m.estado_visual || m.estado}`;
-
-      const label = tile.querySelector('.mesa-label');
-      if (m.estado === 'libre') label.textContent = 'Libre';
-      else if (m.tiene_solicitud) label.textContent = 'Solicitud';
-      else if (m.pedidos_listos > 0) label.textContent = '¡Listo!';
-      else if (m.pedidos_cocina > 0) label.textContent = 'En cocina';
-      else label.textContent = 'Ocupada';
-
-      const dot = tile.querySelector('.mesa-dot');
-      dot.style.background = {
-        'libre': 'var(--mm-text-muted)',
-        'ocupada': 'var(--mm-green)',
-        'cocina': 'var(--mm-info)',
-        'listo': 'var(--mm-success)',
-        'cobrando': 'var(--mm-gold)',
-        'solicitud': 'var(--mm-danger)'
-      }[m.estado_visual] || 'var(--mm-green)';
+async function selectMesa(id, numero, silent=false) {
+  currentMesaId = id;
+  if (!silent) document.getElementById('mesaPanel').style.display = 'flex';
+  try {
+    const res = await fetch(`{% url "gerente:detalle_mesa" 0 %}`.replace('/0/', `/${id}/`));
+    panelData = await res.json();
+    if (!panelData.ok) return;
+    if (numero) document.getElementById('panelTitle').textContent = `Mesa ${panelData.numero_mesa}`;
+    if (panelData.pin) {
+      document.getElementById('panelPin').style.display = 'block';
+      document.getElementById('panelPin').textContent = panelData.pin;
     }
+    const eb = document.getElementById('panelEstado');
+    eb.textContent = panelData.mesa_libre ? 'Libre' : 'Ocupada';
+    eb.style.background = panelData.mesa_libre ? 'var(--mm-cream-dark)' : 'var(--mm-green-pale)';
+    eb.style.color = panelData.mesa_libre ? 'var(--mm-text-muted)' : 'var(--mm-green)';
+    document.getElementById('btnCerrarMesa').style.display = panelData.mesa_libre ? 'none' : 'block';
+    renderTab(currentTab);
+  } catch(e) {}
+}
+
+function closePanel() { document.getElementById('mesaPanel').style.display = 'none'; currentMesaId = null; }
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.panel-tab').forEach(t => {
+    const a = t.dataset.tab === tab;
+    t.style.borderBottom = a ? '2px solid var(--mm-green)' : '2px solid transparent';
+    t.style.color = a ? 'var(--mm-green)' : 'var(--mm-text-muted)';
   });
+  renderTab(tab);
 }
 
-function filterMesas(estado, btn) {
-  document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  document.querySelectorAll('.mesa-tile').forEach(tile => {
-    if (estado === 'todas') tile.style.display = '';
-    else if (estado === 'solicitud') tile.style.display = tile.dataset.solicitud === 'true' ? '' : 'none';
-    else if (estado === 'listo') tile.style.display = parseInt(tile.dataset.listos || 0) > 0 ? '' : 'none';
-    else if (estado === 'cocina') tile.style.display = parseInt(tile.dataset.cocina || 0) > 0 ? '' : 'none';
-    else tile.style.display = tile.dataset.estado === estado ? '' : 'none';
-  });
-}
+const statusColors = { recibido:'#2471A3', preparando:'#CA8A04', listo:'#1E8449', entregado:'#566573', cancelado:'#C0392B' };
+const statusBg = { recibido:'#EBF3FD', preparando:'#FEF9E7', listo:'#EAFAF1', entregado:'#F2F3F4', cancelado:'#FDEDEC' };
 
-function verPIN(pin) {
-  if (!pin || pin === '—') {
-    showToast('Esta mesa no tiene PIN activo', 'warning');
-    return;
+function renderTab(tab) {
+  const content = document.getElementById('panelContent');
+  if (!panelData) return;
+  if (tab === 'sesiones') {
+    content.innerHTML = `
+      <button onclick="abrirAgregarCliente()" class="btn btn-sm w-100 mb-3 rounded-3" style="background:var(--mm-cream-dark); color:var(--mm-text); font-size:.85rem; border:none; padding:.5rem;">
+        <i class="bi bi-person-plus me-1"></i> Agregar cliente a la mesa
+      </button>
+      ${(panelData.sesiones||[]).map(s => `
+        <div style="border:1px solid var(--mm-border); border-radius:var(--radius-sm); padding:.75rem; margin-bottom:.75rem;">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="d-flex gap-2 align-items-center">
+              <div style="width:32px;height:32px;border-radius:50%;background:var(--mm-green);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;">${s.alias[0].toUpperCase()}</div>
+              <div><div style="font-weight:600; font-size:.875rem;">${s.alias}</div>
+              <div style="font-size:.75rem; color:var(--mm-text-muted);">${s.pedidos.length} pedidos · $${s.total.toFixed(2)}</div></div>
+            </div>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm flex-grow-1 rounded-3" style="background:var(--mm-green);color:#fff;font-size:.78rem;border:none;" onclick="abrirAsistido(${s.id},'${s.alias}')">
+              <i class="bi bi-plus-circle me-1"></i>+ Agregar pedido
+            </button>
+            <button class="btn btn-sm rounded-3" style="background:var(--mm-cream-dark);color:var(--mm-danger);font-size:.78rem;border:none;" onclick="cerrarSesion(${s.id},'${s.alias}')">
+              <i class="bi bi-x-circle me-1"></i> Cerrar
+            </button>
+          </div>
+        </div>`).join('')}`;
   }
-  showToast(`PIN de la mesa: ${pin}`, 'info');
-}
-
-function abrirPanel(mesaId) {
-  currentMesaId = mesaId;
-  const mesa = mesasData.find(m => m.id == mesaId);
-  if (!mesa) return;
-
-  document.getElementById('panelMesaNum').textContent = mesa.numero;
-  document.getElementById('panelPinBadge').textContent = mesa.pin || '—';
-
-  fetch(`/gerente/floor-plan/mesa/${mesaId}/`)
-    .then(r => r.json())
-    .then(data => renderPanel(data));
-}
-
-function renderPanel(data) {
-  const body = document.getElementById('panelBody');
-  const tpl = document.getElementById('panelTemplate').content.cloneNode(true);
-
-  tpl.getElementById('pinDisplay').textContent = data.pin || '****';
-  tpl.getElementById('totalMesaDisplay').textContent = `$${data.total_mesa.toFixed(2)}`;
-
-  const sessEl = tpl.getElementById('sessionList');
-  if (data.sesiones?.length) {
-    sessEl.innerHTML = data.sesiones.map(s => `
-      <div class="d-flex align-items-center justify-content-between p-2 mb-1 rounded-2" style="background:var(--mm-cream);">
-        <div><i class="bi bi-person me-1 text-green"></i><strong>${s.alias}</strong></div>
-        <div class="d-flex gap-2 align-items-center">
-          <span class="fw-semibold" style="color:var(--mm-green);">$${s.total.toFixed(2)}</span>
+  if (tab === 'pedidos') {
+    const todos = (panelData.sesiones||[]).flatMap(s => s.pedidos.map(p => ({ ...p, alias: s.alias })));
+    content.innerHTML = todos.length ? todos.map(p => `
+      <div style="border:1px solid var(--mm-border); border-radius:var(--radius-sm); padding:.75rem; margin-bottom:.75rem;">
+        <div class="d-flex align-items-center justify-content-between mb-1">
+          <span style="font-weight:600; font-size:.875rem;">#${p.id} · ${p.alias} · ${p.fecha}</span>
+          <span style="background:${statusBg[p.estado]||'#f5f5f5'};color:${statusColors[p.estado]||'#333'};border-radius:99px;padding:.2rem .6rem;font-size:.7rem;font-weight:700;">${p.estado_display}</span>
         </div>
-      </div>`).join('');
-  } else {
-    sessEl.innerHTML = '<p class="text-muted-mm" style="font-size:.82rem;">Sin sesiones activas.</p>';
+        ${p.items.map(i => `<div style="font-size:.8rem;color:var(--mm-text-muted);">${i.cantidad}× ${i.nombre} <span style="float:right;">$${i.subtotal.toFixed(2)}</span>${i.notas?`<div style="color:var(--mm-danger);font-size:.72rem;">⚠ ${i.notas}</div>`:''}</div>`).join('')}
+        <div class="d-flex gap-2 mt-2">
+          ${p.estado==='listo'?`<button class="btn btn-sm flex-grow-1 rounded-3" style="background:var(--mm-green);color:#fff;font-size:.78rem;border:none;" onclick="entregarPedido(${p.id})"><i class="bi bi-check2 me-1"></i>Marcar entregado</button>`:''}
+          ${!['entregado','cancelado'].includes(p.estado)?`<button class="btn btn-sm rounded-3" style="background:#FDEDEC;color:var(--mm-danger);font-size:.78rem;border:none;" onclick="abrirCancelar(${p.id})"><i class="bi bi-x-circle me-1"></i>Cancelar</button>`:''}
+        </div>
+      </div>`).join('') : '<div style="text-align:center;padding:2rem;color:var(--mm-text-muted);"><div style="font-size:2rem;">📋</div><p style="font-size:.85rem;">Sin pedidos</p></div>';
   }
-
-  const ordEl = tpl.getElementById('orderList');
-  const todosPedidos = data.sesiones?.flatMap(s => s.pedidos.map(p => ({...p, alias: s.alias}))) || [];
-  if (todosPedidos.length) {
-    ordEl.innerHTML = todosPedidos.map(p => `
-      <div class="d-flex align-items-center justify-content-between p-2 mb-1 rounded-2" style="background:var(--mm-cream);">
-        <div>
-          <strong>#${p.id}</strong> <span class="text-muted-mm ms-1">${p.alias}</span>
-          <div class="text-muted-mm" style="font-size:.72rem;">${p.items.map(i => `${i.cantidad}x ${i.nombre}`).join(', ')}</div>
-        </div>
-        <div class="d-flex gap-2 align-items-center">
-          <span class="order-status-badge status-${p.estado}">${p.estado_display}</span>
-          ${p.estado !== 'cancelado' && p.estado !== 'entregado' ? `
-            <button class="btn btn-sm btn-outline-danger rounded-2 px-2" style="font-size:.7rem;"
-                    onclick="cancelarPedido(${p.id})" title="Cancelar pedido">
-              <i class="bi bi-x-circle"></i>
-            </button>` : ''}
-        </div>
-      </div>`).join('');
-  } else {
-    ordEl.innerHTML = '<p class="text-muted-mm" style="font-size:.82rem;">Sin pedidos activos.</p>';
-  }
-
-  const solEl = tpl.getElementById('solicitudList');
-  if (data.solicitudes?.length) {
-    solEl.innerHTML = data.solicitudes.map(sol => `
-      <div class="d-flex align-items-center justify-content-between p-2 mb-1 rounded-2" style="background:var(--mm-gold-pale); border:1px solid var(--mm-gold);">
-        <div>
-          <i class="bi bi-receipt me-1 text-gold"></i>
-          <strong>${sol.alias}</strong> · ${sol.tipo_display}
-        </div>
-        <div class="d-flex gap-2 align-items-center">
-          <span class="fw-bold" style="color:var(--mm-gold);">$${sol.total.toFixed(2)}</span>
-          <button class="btn btn-sm btn-gold rounded-pill px-3 py-0" onclick="irAPago()">
-            Cobrar
+  if (tab === 'solicitudes') {
+    content.innerHTML = (panelData.solicitudes||[]).length ?
+      panelData.solicitudes.map(s => `
+        <div style="border:2px solid var(--mm-green);background:var(--mm-green-pale);border-radius:var(--radius-sm);padding:.75rem;margin-bottom:.75rem;">
+          <div class="d-flex justify-content-between mb-1">
+            <div><div style="font-weight:600;font-size:.875rem;">Solicitud de cuenta</div>
+            <div style="font-size:.75rem;color:var(--mm-text-muted);">${s.alias} · ${s.tipo_display} · ${s.fecha}</div></div>
+            <span style="font-weight:700;color:var(--mm-green);">$${s.total.toFixed(2)}</span>
+          </div>
+          <button class="btn btn-primary btn-sm w-100 mt-2 rounded-3" onclick="abrirPago(${panelData.mesa_id},${s.total})">
+            <i class="bi bi-cash-coin me-1"></i>Procesar pago
           </button>
-        </div>
-      </div>`).join('');
-  } else {
-    solEl.innerHTML = '<p class="text-muted-mm" style="font-size:.82rem;">Sin solicitudes pendientes.</p>';
+        </div>`).join('') :
+      '<div style="text-align:center;padding:2rem;color:var(--mm-text-muted);"><div style="font-size:2rem;">🔔</div><p style="font-size:.85rem;">Sin solicitudes</p></div>';
   }
-
-  body.innerHTML = '';
-  body.appendChild(tpl);
-  new bootstrap.Offcanvas(document.getElementById('mesaPanel')).show();
+  if (tab === 'resumen') {
+    content.innerHTML = `
+      <div style="background:var(--mm-green-pale);border-radius:var(--radius-sm);padding:1rem;text-align:center;margin-bottom:1rem;">
+        <div style="font-size:.8rem;color:var(--mm-text-muted);">Total consumido</div>
+        <div style="font-size:1.75rem;font-weight:700;color:var(--mm-green);">$${(panelData.total_mesa||0).toFixed(2)}</div>
+      </div>
+      <div style="font-size:.85rem;color:var(--mm-text-muted);">
+        <div class="d-flex justify-content-between py-1" style="border-bottom:1px solid var(--mm-border);">
+          <span>Sesiones activas</span><span>${(panelData.sesiones||[]).length}</span>
+        </div>
+        <div class="d-flex justify-content-between py-1">
+          <span>Total pedidos</span><span>${(panelData.sesiones||[]).reduce((a,s)=>a+s.pedidos.length,0)}</span>
+        </div>
+      </div>`;
+  }
 }
 
-function cancelarPedido(pedidoId) {
-  const motivo = prompt('Motivo de cancelación (obligatorio):');
-  if (!motivo) return;
-  fetch('{% url "gerente:cancelar_pedido" %}', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-    body: JSON.stringify({ pedido_id: pedidoId, motivo })
-  }).then(r => r.json()).then(d => {
-    if (d.ok) {
-      showToast('Pedido cancelado', 'success');
-      abrirPanel(currentMesaId);
-      cargarEstadoMesas();
-    } else {
-      showToast(d.error, 'error');
-    }
+async function cerrarSesion(sid, alias) {
+  if (!confirm(`¿Cerrar sesión de ${alias}?`)) return;
+  const res = await fetch('/mesero/sesion/cerrar/', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body: JSON.stringify({sesion_id:sid}) });
+  const d = await res.json();
+  if (d.ok) { showToast('Sesión cerrada', 'success'); selectMesa(currentMesaId, null, true); }
+}
+
+async function cerrarMesa() {
+  if (!confirm('¿Cerrar esta mesa?')) return;
+  const res = await fetch('/mesero/mesa/cerrar/', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body: JSON.stringify({mesa_id:currentMesaId}) });
+  const d = await res.json();
+  if (d.ok) { showToast('Mesa cerrada', 'success'); closePanel(); pollMesas(); }
+}
+
+async function entregarPedido(id) {
+  const res = await fetch('/mesero/pedidos/entregar/', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body: JSON.stringify({pedido_id:id}) });
+  const d = await res.json();
+  if (d.ok) { showToast('Pedido entregado', 'success'); selectMesa(currentMesaId, null, true); }
+}
+
+function abrirCancelar(id) {
+  document.getElementById('cancelarPedidoId').value = id;
+  document.getElementById('cancelarMotivo').value = '';
+  new bootstrap.Modal(document.getElementById('cancelarModal')).show();
+}
+
+async function confirmarCancelacion() {
+  const id = document.getElementById('cancelarPedidoId').value;
+  const motivo = document.getElementById('cancelarMotivo').value.trim();
+  if (!motivo) { document.getElementById('cancelarMotivo').style.borderColor = 'var(--mm-danger)'; return; }
+  const res = await fetch('{% url "gerente:cancelar_pedido" %}', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body: JSON.stringify({pedido_id:id, motivo}) });
+  const d = await res.json();
+  if (d.ok) { bootstrap.Modal.getInstance(document.getElementById('cancelarModal')).hide(); showToast('Pedido cancelado', 'success'); selectMesa(currentMesaId, null, true); }
+}
+
+function abrirPago(mesaId, total) {
+  // Redirect to mesero pago view
+  window.location.href = `/mesero/pago/?mesa=${mesaId}`;
+}
+
+function abrirAsistido(sesionId, alias) {
+  asistidoSesionId = sesionId; asistidoCart = [];
+  document.getElementById('asistidoTitle').textContent = `Pedido asistido · ${alias}`;
+  document.getElementById('asistidoSubtitle').textContent = `Mesa ${panelData?.numero_mesa}`;
+  document.getElementById('asistidoCartSummary').style.display = 'none';
+  document.getElementById('btnConfirmarAsistido').disabled = true;
+  // Fetch products
+  fetch('/gerente/menu/productos/?format=json').then(r => r.text()).then(() => {
+    document.getElementById('asistidoProductsContainer').innerHTML = '<p style="color:var(--mm-text-muted); font-size:.875rem;">Carga el menú desde Gestión de Menú para usar pedido asistido aquí.</p>';
   });
+  new bootstrap.Modal(document.getElementById('asistidoModal')).show();
 }
 
-function confirmarCerrarMesa(mesaId) {
-  if (!confirm('¿Cerrar la mesa? Se invalidará el PIN y se cerrarán todas las sesiones activas.')) return;
-  fetch('{% url "mesero:cerrar_mesa" %}', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-    body: JSON.stringify({ mesa_id: mesaId })
-  }).then(r => r.json()).then(d => {
-    if (d.ok) {
-      bootstrap.Offcanvas.getInstance(document.getElementById('mesaPanel'))?.hide();
-      showToast('Mesa cerrada correctamente', 'success');
-      cargarEstadoMesas();
-    } else {
-      showToast(d.error, 'error');
-    }
-  });
+async function confirmarAsistido() {
+  if (!asistidoSesionId || !asistidoCart.length) return;
+  const res = await fetch('/mesero/asistido/confirmar/', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body: JSON.stringify({sesion_id:asistidoSesionId, items:asistidoCart}) });
+  const d = await res.json();
+  if (d.ok) { bootstrap.Modal.getInstance(document.getElementById('asistidoModal')).hide(); showToast('Pedido enviado', 'success'); selectMesa(currentMesaId, null, true); }
 }
 
-function irAPago() {
-  if (currentMesaId) window.location.href = `/mesero/pago/?mesa=${currentMesaId}`;
-}
-
-// Inicializar y polling
-cargarEstadoMesas();
-setInterval(cargarEstadoMesas, 15000);
+function abrirAgregarCliente() { showToast('Función disponible en el módulo mesero', ''); }
 </script>
 {% endblock %}
