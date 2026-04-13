@@ -5,153 +5,138 @@
 {% block page_title %}Empleados{% endblock %}
 
 {% block sidebar_nav %}
-<a href="{% url 'gerente:dashboard' %}"><i class="bi bi-speedometer2"></i> Dashboard</a>
+<a href="{% url 'gerente:floor_plan' %}"><i class="bi bi-grid-fill"></i> Floor Plan</a>
 <div class="nav-section-label">Gestión</div>
-<a href="{% url 'gerente:empleados' %}" class="active"><i class="bi bi-people-fill"></i> Empleados</a>
-<a href="{% url 'gerente:mesas_crud' %}"><i class="bi bi-table"></i> Mesas</a>
+<a href="{% url 'gerente:productos' %}"><i class="bi bi-basket-fill"></i> Gestión de Menú</a>
 <div class="nav-section-label">Reportes</div>
 <a href="{% url 'gerente:reportes' %}"><i class="bi bi-bar-chart-fill"></i> Reportes</a>
-<a href="{% url 'gerente:auditoria' %}"><i class="bi bi-shield-check"></i> Auditoría</a>
-{% endblock %}
-
-{% block topbar_actions %}
-<button class="btn btn-primary btn-sm rounded-pill px-3"
-        data-bs-toggle="modal" data-bs-target="#modalEmpleado">
-  <i class="bi bi-person-plus me-1"></i>Nuevo empleado
-</button>
+<div class="nav-section-label">Admin</div>
+<a href="{% url 'gerente:empleados' %}" class="active"><i class="bi bi-people-fill"></i> Empleados</a>
+<a href="{% url 'gerente:configuracion' %}"><i class="bi bi-gear-fill"></i> Configuración</a>
 {% endblock %}
 
 {% block content %}
 
-<div class="card border-0">
-  <div class="card-body p-0">
-    <table class="table data-table mb-0">
-      <thead>
-        <tr>
-          <th class="ps-3">Empleado</th>
-          <th>Usuario</th>
-          <th>Rol</th>
-          <th>Estado</th>
-          <th>Última actividad</th>
-          <th class="text-end pe-3">Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for emp in empleados %}
-        <tr>
-          <td class="ps-3">
-            <div class="d-flex align-items-center gap-2">
-              <div class="avatar-circle" style="background:{% cycle 'var(--mm-green)' 'var(--mm-gold)' '#7C3AED' '#1A6A8A' %};">
-                {{ emp.nombre|first|upper }}
-              </div>
-              <div>
-                <div class="fw-semibold" style="font-size:.875rem;">{{ emp.nombre }}</div>
-                {% if not emp.is_active %}
-                <span class="badge rounded-pill bg-secondary" style="font-size:.6rem;">Inactivo</span>
-                {% endif %}
-              </div>
-            </div>
-          </td>
-          <td style="font-size:.85rem; font-family:var(--font-mono); color:var(--mm-text-muted);">
-            {{ emp.usuario }}
-          </td>
-          <td>
-            <span class="badge rounded-pill"
-                  style="font-size:.72rem;
-                  {% if emp.rol == 'admin' %}background:#F3E8FF;color:#7C3AED;
-                  {% elif emp.rol == 'gerente' %}background:var(--mm-gold-pale);color:var(--mm-gold);
-                  {% else %}background:var(--mm-green-pale);color:var(--mm-green);{% endif %}">
-              {{ emp.get_rol_display }}
-            </span>
-          </td>
-          <td>
-            <div class="form-check form-switch mb-0">
-              <input class="form-check-input" type="checkbox"
-                     {% if emp.is_active %}checked{% endif %}
-                     onchange="toggleActivo({{ emp.id }}, this.checked)"
-                     {% if emp == request.user %}disabled title="No puedes desactivarte a ti mismo"{% endif %}>
-            </div>
-          </td>
-          <td class="text-muted-mm" style="font-size:.8rem;">
-            {{ emp.last_login|date:"d/m/Y H:i"|default:"—" }}
-          </td>
-          <td class="text-end pe-3">
-            <button class="btn btn-sm btn-outline-secondary rounded-2 px-2"
-                    style="font-size:.75rem;"
-                    onclick="editarEmpleado({{ emp.id }}, '{{ emp.nombre|escapejs }}',
-                      '{{ emp.usuario|escapejs }}', '{{ emp.rol }}')">
-              <i class="bi bi-pencil"></i>
-            </button>
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="6" class="text-center text-muted-mm py-5">
-            No hay empleados registrados.
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h5 class="fw-bold mb-0">Empleados</h5>
+    <p style="font-size:.8rem; color:var(--mm-text-muted); margin:0;">{{ activos|length }} activos · {{ inactivos|length }} inactivos</p>
   </div>
+  <button class="btn btn-primary rounded-pill px-3" onclick="openNewEmpleado()">
+    <i class="bi bi-person-plus me-1"></i>Nuevo empleado
+  </button>
 </div>
 
-
-<!-- Modal: Create / Edit employee -->
-<div class="modal fade" id="modalEmpleado" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered" style="max-width:400px;">
-    <div class="modal-content border-0 rounded-4 mx-3">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-bold" id="modalEmpleadoTitle">Nuevo empleado</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+{% if activos %}
+<div class="mb-1" style="font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--mm-text-muted);">Activos ({{ activos|length }})</div>
+<div class="mb-4">
+  {% for emp in activos %}
+  <div style="border:1px solid var(--mm-border); border-radius:var(--radius-md); padding:1rem 1.25rem; margin-bottom:.5rem; background:var(--mm-white);" class="d-flex align-items-center gap-3">
+    <!-- Avatar -->
+    <div style="width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1rem; color:#fff; flex-shrink:0;
+        background:{% if emp.rol == 'gerente' or emp.rol == 'admin' %}var(--mm-gold){% elif emp.rol == 'cocina' %}#e67e22{% else %}var(--mm-green){% endif %};">
+      {{ emp.nombre|first|upper }}{{ emp.nombre|slice:"1:2"|upper }}
+    </div>
+    <!-- Info -->
+    <div class="flex-grow-1">
+      <div style="font-weight:600; font-size:.95rem;">{{ emp.nombre }}</div>
+      <div style="font-size:.78rem; color:var(--mm-text-muted);">@{{ emp.usuario }}
+        {% if emp.last_login %} · Desde {{ emp.last_login|date:"d/m/Y" }}{% endif %}
       </div>
-      <div class="modal-body px-4 pb-4">
-        <form method="post" action="{% url 'gerente:empleados_nuevo' %}" id="formEmpleado">
+    </div>
+    <!-- Role badge -->
+    <span style="background:{% if emp.rol == 'gerente' or emp.rol == 'admin' %}var(--mm-gold-pale){% elif emp.rol == 'cocina' %}#FEF3E7{% else %}var(--mm-green-pale){% endif %};
+                 color:{% if emp.rol == 'gerente' or emp.rol == 'admin' %}var(--mm-gold){% elif emp.rol == 'cocina' %}#e67e22{% else %}var(--mm-green){% endif %};
+                 border-radius:99px; padding:.2rem .75rem; font-size:.75rem; font-weight:700;">
+      {{ emp.get_rol_display }}
+    </span>
+    <!-- Actions -->
+    <div class="d-flex gap-1">
+      <button class="btn btn-link btn-sm p-1" onclick="openEditEmpleado({{ emp.id_empleado }}, '{{ emp.nombre|escapejs }}', '{{ emp.usuario|escapejs }}', '{{ emp.rol }}')" title="Editar">
+        <i class="bi bi-pencil" style="color:var(--mm-text-muted);"></i>
+      </button>
+      <button class="btn btn-link btn-sm p-1" onclick="toggleEmpleado({{ emp.id_empleado }}, true)" title="Desactivar">
+        <i class="bi bi-person-x" style="color:var(--mm-danger);"></i>
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if inactivos %}
+<div class="mb-1" style="font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--mm-text-muted);">Inactivos ({{ inactivos|length }})</div>
+<div>
+  {% for emp in inactivos %}
+  <div style="border:1px solid var(--mm-border); border-radius:var(--radius-md); padding:1rem 1.25rem; margin-bottom:.5rem; background:var(--mm-white); opacity:.6;" class="d-flex align-items-center gap-3">
+    <div style="width:44px; height:44px; border-radius:50%; background:#ccc; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1rem; color:#fff; flex-shrink:0;">
+      {{ emp.nombre|first|upper }}{{ emp.nombre|slice:"1:2"|upper }}
+    </div>
+    <div class="flex-grow-1">
+      <div style="font-weight:600; font-size:.95rem; color:var(--mm-text-muted);">{{ emp.nombre }}</div>
+      <div style="font-size:.78rem; color:var(--mm-text-muted);">@{{ emp.usuario }}</div>
+    </div>
+    <span style="background:var(--mm-cream-dark); color:var(--mm-text-muted); border-radius:99px; padding:.2rem .75rem; font-size:.75rem; font-weight:700;">
+      {{ emp.get_rol_display }}
+    </span>
+    <button class="btn btn-link btn-sm p-1" onclick="toggleEmpleado({{ emp.id_empleado }}, false)" title="Reactivar">
+      <i class="bi bi-person-check" style="color:var(--mm-green);"></i>
+    </button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if not activos and not inactivos %}
+<div class="text-center py-5" style="color:var(--mm-text-muted);">
+  <div style="font-size:3rem; margin-bottom:1rem;">👥</div>
+  <h6 class="fw-bold mb-1">No hay empleados registrados</h6>
+  <p style="font-size:.875rem;">Crea el primer empleado con el botón de arriba</p>
+</div>
+{% endif %}
+
+<!-- Modal: Nuevo empleado -->
+<div class="modal fade" id="empModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:440px;">
+    <div class="modal-content rounded-4 border-0">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="empModalTitle">Nuevo empleado</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-4">
+        <form id="empForm" method="post">
           {% csrf_token %}
-          <input type="hidden" name="empleado_id" id="empleadoId">
-
           <div class="mb-3">
-            <label class="form-label fw-semibold" style="font-size:.82rem;">Nombre completo</label>
-            <input type="text" name="nombre" id="empNombre" class="form-control rounded-3" required
-                   maxlength="100" placeholder="Ej. Ana García">
+            <label class="form-label fw-semibold" style="font-size:.85rem;">Nombre completo <span class="text-danger">*</span></label>
+            <input type="text" name="nombre" id="eNombre" required class="form-control" style="border-color:var(--mm-border);" placeholder="ej. Ana García">
           </div>
-
           <div class="mb-3">
-            <label class="form-label fw-semibold" style="font-size:.82rem;">Usuario</label>
-            <input type="text" name="usuario" id="empUsuario" class="form-control rounded-3" required
-                   maxlength="50" placeholder="Ej. ana.garcia"
-                   autocomplete="off" autocorrect="off" autocapitalize="off">
+            <label class="form-label fw-semibold" style="font-size:.85rem;">Usuario <span class="text-danger">*</span></label>
+            <input type="text" name="usuario" id="eUsuario" required class="form-control" style="border-color:var(--mm-border);" placeholder="ej. ana.garcia" autocomplete="off">
           </div>
-
           <div class="mb-3">
-            <label class="form-label fw-semibold" style="font-size:.82rem;">
-              Contraseña <span class="text-muted-mm fw-normal" id="passHint">(mínimo 8 caracteres)</span>
-            </label>
+            <label class="form-label fw-semibold" style="font-size:.85rem;">Contraseña <span id="passRequired" class="text-danger">*</span></label>
             <div class="input-group">
-              <input type="password" name="password" id="empPassword" class="form-control rounded-start-3"
-                     placeholder="••••••••" autocomplete="new-password">
-              <button type="button" class="input-group-text btn" style="border-color:var(--mm-border);"
-                      onclick="this.previousElementSibling.type =
-                        this.previousElementSibling.type === 'password' ? 'text' : 'password'">
-                <i class="bi bi-eye"></i>
+              <input type="password" name="password" id="ePassword" class="form-control" style="border-color:var(--mm-border); border-right:none;" placeholder="••••••••" autocomplete="new-password">
+              <button type="button" class="input-group-text btn" style="background:var(--mm-cream); border-color:var(--mm-border); cursor:pointer;" onclick="toggleEmpPass()">
+                <i class="bi bi-eye" id="empPassEye"></i>
               </button>
             </div>
+            <div id="passHint" style="font-size:.75rem; color:var(--mm-text-muted); margin-top:.25rem; display:none;">Deja vacío para mantener la contraseña actual</div>
           </div>
-
           <div class="mb-4">
-            <label class="form-label fw-semibold" style="font-size:.82rem;">Rol</label>
-            <select name="rol" id="empRol" class="form-select rounded-3" required>
+            <label class="form-label fw-semibold" style="font-size:.85rem;">Rol <span class="text-danger">*</span></label>
+            <select name="rol" id="eRol" required class="form-select" style="border-color:var(--mm-border);">
               <option value="mesero">Mesero</option>
+              <option value="cocina">Cocina</option>
+              <option value="cajero">Cajero</option>
               <option value="gerente">Gerente</option>
-              {% if request.user.rol == 'admin' %}
-              <option value="admin">Admin</option>
-              {% endif %}
             </select>
           </div>
-
-          <button type="submit" class="btn btn-primary w-100 py-2" id="btnGuardarEmp">
-            <i class="bi bi-person-plus me-2"></i>Crear empleado
-          </button>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn flex-grow-1" style="background:var(--mm-cream-dark);" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary flex-grow-1">Guardar</button>
+          </div>
         </form>
       </div>
     </div>
@@ -164,39 +149,47 @@
 <script>
 const CSRF = getCsrf();
 
-function editarEmpleado(id, nombre, usuario, rol) {
-  document.getElementById('modalEmpleadoTitle').textContent = 'Editar empleado';
-  document.getElementById('empleadoId').value = id;
-  document.getElementById('empNombre').value  = nombre;
-  document.getElementById('empUsuario').value = usuario;
-  document.getElementById('empRol').value     = rol;
-  document.getElementById('empPassword').required = false;
-  document.getElementById('passHint').textContent = '(dejar vacío para no cambiar)';
-  document.getElementById('btnGuardarEmp').innerHTML = '<i class="bi bi-floppy me-2"></i>Guardar cambios';
-  document.getElementById('formEmpleado').action = `/gerente/empleados/${id}/editar/`;
-  new bootstrap.Modal(document.getElementById('modalEmpleado')).show();
+function openNewEmpleado() {
+  document.getElementById('empModalTitle').textContent = 'Nuevo empleado';
+  document.getElementById('empForm').action = '{% url "gerente:empleados_nuevo" %}';
+  document.getElementById('eNombre').value = '';
+  document.getElementById('eUsuario').value = '';
+  document.getElementById('ePassword').value = '';
+  document.getElementById('eRol').value = 'mesero';
+  document.getElementById('eUsuario').readOnly = false;
+  document.getElementById('passRequired').style.display = 'inline';
+  document.getElementById('passHint').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('empModal')).show();
 }
 
-function toggleActivo(id, activo) {
-  fetch(`/gerente/empleados/${id}/editar/`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-    body: JSON.stringify({ is_active: activo })
-  }).then(r => r.json()).then(() => {
-    showToast(activo ? 'Empleado activado' : 'Empleado desactivado',
-              activo ? 'success' : 'warning');
+function openEditEmpleado(id, nombre, usuario, rol) {
+  document.getElementById('empModalTitle').textContent = 'Editar empleado';
+  document.getElementById('empForm').action = `{% url "gerente:empleado_editar" 0 %}`.replace('/0/', `/${id}/`);
+  document.getElementById('eNombre').value = nombre;
+  document.getElementById('eUsuario').value = usuario;
+  document.getElementById('eUsuario').readOnly = true;
+  document.getElementById('ePassword').value = '';
+  document.getElementById('eRol').value = rol;
+  document.getElementById('passRequired').style.display = 'none';
+  document.getElementById('passHint').style.display = 'block';
+  new bootstrap.Modal(document.getElementById('empModal')).show();
+}
+
+async function toggleEmpleado(id, activo) {
+  const accion = activo ? 'desactivar' : 'reactivar';
+  if (!confirm(`¿${accion.charAt(0).toUpperCase() + accion.slice(1)} este empleado?`)) return;
+  const res = await fetch(`{% url "gerente:empleado_toggle" 0 %}`.replace('/0/', `/${id}/`), {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF }
   });
+  const d = await res.json();
+  if (d.ok) location.reload();
 }
 
-// Reset modal on close
-document.getElementById('modalEmpleado').addEventListener('hidden.bs.modal', () => {
-  document.getElementById('formEmpleado').reset();
-  document.getElementById('empleadoId').value = '';
-  document.getElementById('modalEmpleadoTitle').textContent = 'Nuevo empleado';
-  document.getElementById('empPassword').required = true;
-  document.getElementById('passHint').textContent = '(mínimo 8 caracteres)';
-  document.getElementById('btnGuardarEmp').innerHTML = '<i class="bi bi-person-plus me-2"></i>Crear empleado';
-  document.getElementById('formEmpleado').action = '{% url "gerente:empleados_nuevo" %}';
-});
+function toggleEmpPass() {
+  const input = document.getElementById('ePassword');
+  const eye = document.getElementById('empPassEye');
+  input.type = input.type === 'password' ? 'text' : 'password';
+  eye.className = input.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+}
 </script>
 {% endblock %}
