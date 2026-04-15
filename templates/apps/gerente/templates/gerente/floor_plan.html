@@ -1,0 +1,374 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+
+{% block title %}Floor Plan{% endblock %}
+{% block page_title %}Floor Plan{% endblock %}
+
+{% block sidebar_nav %}
+<a href="{% url 'gerente:floor_plan' %}" class="active"><i class="bi bi-grid-fill"></i> Floor Plan</a>
+<div class="nav-section-label">Gestión</div>
+<a href="{% url 'gerente:productos' %}"><i class="bi bi-basket-fill"></i> Gestión de Menú</a>
+<div class="nav-section-label">Reportes</div>
+<a href="{% url 'gerente:reportes' %}"><i class="bi bi-bar-chart-fill"></i> Reportes</a>
+<div class="nav-section-label">Admin</div>
+<a href="{% url 'gerente:empleados' %}"><i class="bi bi-people-fill"></i> Empleados</a>
+<a href="{% url 'gerente:configuracion' %}"><i class="bi bi-gear-fill"></i> Configuración</a>
+{% endblock %}
+
+{% block topbar_actions %}
+{% if listos_count > 0 %}
+<a href="#" class="btn btn-sm rounded-pill px-3" style="background:var(--mm-green-pale); color:var(--mm-green); font-size:.78rem; text-decoration:none;">
+  <i class="bi bi-check2-circle me-1"></i>{{ listos_count }} listos para entregar
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="d-flex gap-3" style="height:calc(100vh - 56px - 3rem); overflow:hidden;">
+
+  <!-- Floor Plan -->
+  <div class="flex-grow-1 overflow-y-auto">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <div>
+        <h5 class="fw-bold mb-0">Floor Plan</h5>
+        <p style="font-size:.8rem; color:var(--mm-text-muted); margin-bottom:0;" id="mesasSummary">Cargando…</p>
+      </div>
+      {% if listos_count > 0 %}
+      <span class="badge rounded-pill px-3 py-2" style="background:var(--mm-green-pale); color:var(--mm-green); font-size:.78rem;">
+        <i class="bi bi-check2-circle me-1"></i>{{ listos_count }} listos para entregar
+      </span>
+      {% endif %}
+    </div>
+
+    <!-- Legend -->
+    <div class="d-flex gap-3 mb-3 flex-wrap">
+      <span style="font-size:.75rem; color:var(--mm-text-muted); display:flex; align-items:center; gap:.35rem;"><span style="width:10px;height:10px;border-radius:50%;background:#ccc;display:inline-block;"></span>Libre</span>
+      <span style="font-size:.75rem; color:var(--mm-text-muted); display:flex; align-items:center; gap:.35rem;"><span style="width:10px;height:10px;border-radius:50%;background:var(--mm-info);display:inline-block;"></span>Ocupada</span>
+      <span style="font-size:.75rem; color:var(--mm-text-muted); display:flex; align-items:center; gap:.35rem;"><span style="width:10px;height:10px;border-radius:50%;background:var(--mm-gold);display:inline-block;"></span>En cocina</span>
+      <span style="font-size:.75rem; color:var(--mm-text-muted); display:flex; align-items:center; gap:.35rem;"><span style="width:10px;height:10px;border-radius:50%;background:var(--mm-green);display:inline-block;"></span>Cobrando</span>
+    </div>
+
+    <div class="table-grid" id="mesasGrid">
+      {% for mesa in mesas %}
+      <div class="mesa-tile libre" id="mesa-tile-{{ mesa.pk }}" onclick="selectMesa({{ mesa.pk }}, {{ mesa.numero_mesa }})">
+        <div class="mesa-dot"></div>
+        <div class="mesa-num">{{ mesa.numero_mesa }}</div>
+        <div class="mesa-label">Libre</div>
+        <div style="font-size:.65rem; color:var(--mm-text-muted); margin-top:.2rem;">
+          <i class="bi bi-people" style="font-size:.65rem;"></i> 0
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Side Panel -->
+  <div id="mesaPanel" style="width:380px; flex-shrink:0; background:var(--mm-white); border:1px solid var(--mm-border); border-radius:var(--radius-md); overflow:hidden; display:none; flex-direction:column;">
+    <div id="panelHeader" style="padding:1rem 1.25rem; border-bottom:1px solid var(--mm-border);">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <h6 class="fw-bold mb-0" id="panelTitle">Mesa —</h6>
+          <span class="badge rounded-pill mt-1" id="panelEstado" style="font-size:.7rem;"></span>
+          <span class="badge rounded-pill mt-1 ms-1" id="panelListo" style="background:var(--mm-green-pale); color:var(--mm-green); font-size:.7rem; display:none;"></span>
+        </div>
+        <button class="btn btn-link p-0" onclick="closePanel()" style="color:var(--mm-text-muted);"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="mesa-panel-pin mt-2" id="panelPin" style="display:none;"></div>
+    </div>
+
+    <div style="display:flex; border-bottom:1px solid var(--mm-border);">
+      <button class="panel-tab active" data-tab="sesiones" onclick="switchTab('sesiones')" style="flex:1; padding:.6rem; font-size:.8rem; font-weight:600; border:none; background:none; cursor:pointer; border-bottom:2px solid transparent; color:var(--mm-text-muted);">Sesiones</button>
+      <button class="panel-tab" data-tab="pedidos" onclick="switchTab('pedidos')" style="flex:1; padding:.6rem; font-size:.8rem; font-weight:600; border:none; background:none; cursor:pointer; border-bottom:2px solid transparent; color:var(--mm-text-muted);">Pedidos</button>
+      <button class="panel-tab" data-tab="solicitudes" onclick="switchTab('solicitudes')" style="flex:1; padding:.6rem; font-size:.8rem; font-weight:600; border:none; background:none; cursor:pointer; border-bottom:2px solid transparent; color:var(--mm-text-muted);">Solicitudes</button>
+      <button class="panel-tab" data-tab="resumen" onclick="switchTab('resumen')" style="flex:1; padding:.6rem; font-size:.8rem; font-weight:600; border:none; background:none; cursor:pointer; border-bottom:2px solid transparent; color:var(--mm-text-muted);">Resumen</button>
+    </div>
+
+    <div style="flex:1; overflow-y:auto; padding:1rem;" id="panelContent">
+      <div style="text-align:center; padding:2rem; color:var(--mm-text-muted);">
+        <div style="font-size:2rem;">🪑</div>
+        <p style="font-size:.85rem; margin-top:.5rem;">Selecciona una mesa</p>
+      </div>
+    </div>
+
+    <div style="padding:.75rem 1rem; border-top:1px solid var(--mm-border);">
+      <button class="btn btn-outline-danger w-100 btn-sm rounded-3" id="btnCerrarMesa" onclick="cerrarMesa()" style="display:none;">
+        <i class="bi bi-door-closed me-1"></i>Cerrar mesa
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Cancelar pedido -->
+<div class="modal fade" id="cancelarModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px;">
+    <div class="modal-content rounded-4 border-0">
+      <div class="modal-body p-4">
+        <h5 class="fw-bold mb-1 text-danger"><i class="bi bi-x-circle me-2"></i>Cancelar pedido</h5>
+        <p style="font-size:.875rem; color:var(--mm-text-muted); margin-bottom:1rem;">Esta acción no se puede deshacer. Ingresa el motivo de cancelación.</p>
+        <input type="hidden" id="cancelarPedidoId">
+        <div class="mb-4">
+          <label class="form-label fw-semibold" style="font-size:.875rem;">Motivo <span class="text-danger">*</span></label>
+          <textarea id="cancelarMotivo" class="form-control rounded-3" rows="3" placeholder="ej. Cliente cambió de opinión, producto agotado…" style="border-color:var(--mm-border); font-size:.875rem; resize:none;"></textarea>
+        </div>
+        <button class="btn btn-danger w-100 py-2 fw-bold" onclick="confirmarCancelacion()">Confirmar cancelación</button>
+        <button class="btn w-100 py-2 mt-2" style="background:var(--mm-cream-dark);" data-bs-dismiss="modal">Volver</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pedido asistido modal (same as mesero) -->
+<div class="modal fade" id="asistidoModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content rounded-4 border-0">
+      <div class="modal-header border-0 pb-0">
+        <div>
+          <h5 class="modal-title fw-bold" id="asistidoTitle">Pedido asistido</h5>
+          <p class="mb-0" id="asistidoSubtitle" style="font-size:.85rem; color:var(--mm-text-muted);"></p>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <p class="text-muted" style="font-size:.875rem;">Selecciona productos para añadir al pedido de este cliente.</p>
+        <div id="asistidoProductsContainer" style="max-height:400px; overflow-y:auto;"></div>
+        <div id="asistidoCartSummary" style="display:none; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--mm-border);">
+          <h6 class="fw-bold mb-2">Resumen</h6>
+          <div id="asistidoCartItems"></div>
+          <div class="d-flex justify-content-between fw-bold mt-2">
+            <span>Total</span><span id="asistidoTotal" style="color:var(--mm-green);">$0.00</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button class="btn btn-primary px-4 py-2 fw-bold" onclick="confirmarAsistido()" id="btnConfirmarAsistido" disabled>
+          <i class="bi bi-send me-2"></i>Enviar a cocina
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF = getCsrf();
+let currentMesaId = null;
+let currentTab = 'sesiones';
+let panelData = null;
+let asistidoSesionId = null;
+let asistidoCart = [];
+let menuData = null;
+
+// Fetch menu for asistido
+async function fetchMenu() {
+  // Use products from categories already available in context via a simple JSON endpoint
+  // We use the gerente stats as proxy — for menu we rely on products rendered in asistidoProductsContainer
+  menuData = true; // flag
+}
+
+const estadoStyles = {
+  libre:    { cls:'libre',   label:'Libre',     dot:'#ccc' },
+  ocupada:  { cls:'ocupada', label:'Ocupada',   dot:'var(--mm-info)' },
+  cocina:   { cls:'pedidos', label:'En cocina', dot:'var(--mm-gold)' },
+  listo:    { cls:'ocupada', label:'Listo!',    dot:'var(--mm-green)' },
+  cobrando: { cls:'pagando', label:'Cobrando',  dot:'var(--mm-green)' },
+};
+
+async function pollMesas() {
+  try {
+    const res = await fetch('{% url "gerente:mesas_estado" %}');
+    const data = await res.json();
+    if (!data.ok) return;
+    let ocupadas = 0, libres = 0;
+    data.mesas.forEach(m => {
+      const tile = document.getElementById(`mesa-tile-${m.id}`);
+      if (!tile) return;
+      const s = estadoStyles[m.estado_visual] || estadoStyles.libre;
+      tile.className = `mesa-tile ${s.cls}`;
+      tile.querySelector('.mesa-dot').style.background = s.dot;
+      tile.querySelector('.mesa-num').textContent = m.numero;
+      tile.querySelector('.mesa-label').textContent = s.label;
+      tile.querySelector('div:last-child').innerHTML = `<i class="bi bi-people" style="font-size:.65rem;"></i> ${m.clientes}`;
+      if (m.estado_visual !== 'libre') ocupadas++; else libres++;
+    });
+    document.getElementById('mesasSummary').textContent = `${ocupadas} mesas activas · ${libres} libres`;
+    if (currentMesaId) selectMesa(currentMesaId, null, true);
+  } catch(e) {}
+}
+setInterval(pollMesas, 3000);
+pollMesas();
+
+async function selectMesa(id, numero, silent=false) {
+  currentMesaId = id;
+  if (!silent) document.getElementById('mesaPanel').style.display = 'flex';
+  try {
+    const res = await fetch(`{% url "gerente:detalle_mesa" 0 %}`.replace('/0/', `/${id}/`));
+    panelData = await res.json();
+    if (!panelData.ok) return;
+    if (numero) document.getElementById('panelTitle').textContent = `Mesa ${panelData.numero_mesa}`;
+    if (panelData.pin) {
+      document.getElementById('panelPin').style.display = 'block';
+      document.getElementById('panelPin').textContent = panelData.pin;
+    }
+    const eb = document.getElementById('panelEstado');
+    eb.textContent = panelData.mesa_libre ? 'Libre' : 'Ocupada';
+    eb.style.background = panelData.mesa_libre ? 'var(--mm-cream-dark)' : 'var(--mm-green-pale)';
+    eb.style.color = panelData.mesa_libre ? 'var(--mm-text-muted)' : 'var(--mm-green)';
+    document.getElementById('btnCerrarMesa').style.display = panelData.mesa_libre ? 'none' : 'block';
+    renderTab(currentTab);
+  } catch(e) {}
+}
+
+function closePanel() { document.getElementById('mesaPanel').style.display = 'none'; currentMesaId = null; }
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.panel-tab').forEach(t => {
+    const a = t.dataset.tab === tab;
+    t.style.borderBottom = a ? '2px solid var(--mm-green)' : '2px solid transparent';
+    t.style.color = a ? 'var(--mm-green)' : 'var(--mm-text-muted)';
+  });
+  renderTab(tab);
+}
+
+const statusColors = { recibido:'#2471A3', preparando:'#CA8A04', listo:'#1E8449', entregado:'#566573', cancelado:'#C0392B' };
+const statusBg = { recibido:'#EBF3FD', preparando:'#FEF9E7', listo:'#EAFAF1', entregado:'#F2F3F4', cancelado:'#FDEDEC' };
+
+function renderTab(tab) {
+  const content = document.getElementById('panelContent');
+  if (!panelData) return;
+  if (tab === 'sesiones') {
+    content.innerHTML = `
+      <button onclick="abrirAgregarCliente()" class="btn btn-sm w-100 mb-3 rounded-3" style="background:var(--mm-cream-dark); color:var(--mm-text); font-size:.85rem; border:none; padding:.5rem;">
+        <i class="bi bi-person-plus me-1"></i> Agregar cliente a la mesa
+      </button>
+      ${(panelData.sesiones||[]).map(s => `
+        <div style="border:1px solid var(--mm-border); border-radius:var(--radius-sm); padding:.75rem; margin-bottom:.75rem;">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="d-flex gap-2 align-items-center">
+              <div style="width:32px;height:32px;border-radius:50%;background:var(--mm-green);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;">${s.alias[0].toUpperCase()}</div>
+              <div><div style="font-weight:600; font-size:.875rem;">${s.alias}</div>
+              <div style="font-size:.75rem; color:var(--mm-text-muted);">${s.pedidos.length} pedidos · $${s.total.toFixed(2)}</div></div>
+            </div>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm flex-grow-1 rounded-3" style="background:var(--mm-green);color:#fff;font-size:.78rem;border:none;" onclick="abrirAsistido(${s.id},'${s.alias}')">
+              <i class="bi bi-plus-circle me-1"></i>+ Agregar pedido
+            </button>
+            <button class="btn btn-sm rounded-3" style="background:var(--mm-cream-dark);color:var(--mm-danger);font-size:.78rem;border:none;" onclick="cerrarSesion(${s.id},'${s.alias}')">
+              <i class="bi bi-x-circle me-1"></i> Cerrar
+            </button>
+          </div>
+        </div>`).join('')}`;
+  }
+  if (tab === 'pedidos') {
+    const todos = (panelData.sesiones||[]).flatMap(s => s.pedidos.map(p => ({ ...p, alias: s.alias })));
+    content.innerHTML = todos.length ? todos.map(p => `
+      <div style="border:1px solid var(--mm-border); border-radius:var(--radius-sm); padding:.75rem; margin-bottom:.75rem;">
+        <div class="d-flex align-items-center justify-content-between mb-1">
+          <span style="font-weight:600; font-size:.875rem;">#${p.id} · ${p.alias} · ${p.fecha}</span>
+          <span style="background:${statusBg[p.estado]||'#f5f5f5'};color:${statusColors[p.estado]||'#333'};border-radius:99px;padding:.2rem .6rem;font-size:.7rem;font-weight:700;">${p.estado_display}</span>
+        </div>
+        ${p.items.map(i => `<div style="font-size:.8rem;color:var(--mm-text-muted);">${i.cantidad}× ${i.nombre} <span style="float:right;">$${i.subtotal.toFixed(2)}</span>${i.notas?`<div style="color:var(--mm-danger);font-size:.72rem;">⚠ ${i.notas}</div>`:''}</div>`).join('')}
+        <div class="d-flex gap-2 mt-2">
+          ${p.estado==='listo'?`<button class="btn btn-sm flex-grow-1 rounded-3" style="background:var(--mm-green);color:#fff;font-size:.78rem;border:none;" onclick="entregarPedido(${p.id})"><i class="bi bi-check2 me-1"></i>Marcar entregado</button>`:''}
+          ${!['entregado','cancelado'].includes(p.estado)?`<button class="btn btn-sm rounded-3" style="background:#FDEDEC;color:var(--mm-danger);font-size:.78rem;border:none;" onclick="abrirCancelar(${p.id})"><i class="bi bi-x-circle me-1"></i>Cancelar</button>`:''}
+        </div>
+      </div>`).join('') : '<div style="text-align:center;padding:2rem;color:var(--mm-text-muted);"><div style="font-size:2rem;">📋</div><p style="font-size:.85rem;">Sin pedidos</p></div>';
+  }
+  if (tab === 'solicitudes') {
+    content.innerHTML = (panelData.solicitudes||[]).length ?
+      panelData.solicitudes.map(s => `
+        <div style="border:2px solid var(--mm-green);background:var(--mm-green-pale);border-radius:var(--radius-sm);padding:.75rem;margin-bottom:.75rem;">
+          <div class="d-flex justify-content-between mb-1">
+            <div><div style="font-weight:600;font-size:.875rem;">Solicitud de cuenta</div>
+            <div style="font-size:.75rem;color:var(--mm-text-muted);">${s.alias} · ${s.tipo_display} · ${s.fecha}</div></div>
+            <span style="font-weight:700;color:var(--mm-green);">$${s.total.toFixed(2)}</span>
+          </div>
+          <button class="btn btn-primary btn-sm w-100 mt-2 rounded-3" onclick="abrirPago(${panelData.mesa_id},${s.total})">
+            <i class="bi bi-cash-coin me-1"></i>Procesar pago
+          </button>
+        </div>`).join('') :
+      '<div style="text-align:center;padding:2rem;color:var(--mm-text-muted);"><div style="font-size:2rem;">🔔</div><p style="font-size:.85rem;">Sin solicitudes</p></div>';
+  }
+  if (tab === 'resumen') {
+    content.innerHTML = `
+      <div style="background:var(--mm-green-pale);border-radius:var(--radius-sm);padding:1rem;text-align:center;margin-bottom:1rem;">
+        <div style="font-size:.8rem;color:var(--mm-text-muted);">Total consumido</div>
+        <div style="font-size:1.75rem;font-weight:700;color:var(--mm-green);">$${(panelData.total_mesa||0).toFixed(2)}</div>
+      </div>
+      <div style="font-size:.85rem;color:var(--mm-text-muted);">
+        <div class="d-flex justify-content-between py-1" style="border-bottom:1px solid var(--mm-border);">
+          <span>Sesiones activas</span><span>${(panelData.sesiones||[]).length}</span>
+        </div>
+        <div class="d-flex justify-content-between py-1">
+          <span>Total pedidos</span><span>${(panelData.sesiones||[]).reduce((a,s)=>a+s.pedidos.length,0)}</span>
+        </div>
+      </div>`;
+  }
+}
+
+async function cerrarSesion(sid, alias) {
+  if (!confirm(`¿Cerrar sesión de ${alias}?`)) return;
+  const res = await fetch('/mesero/sesion/cerrar/', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body: JSON.stringify({sesion_id:sid}) });
+  const d = await res.json();
+  if (d.ok) { showToast('Sesión cerrada', 'success'); selectMesa(currentMesaId, null, true); }
+}
+
+async function cerrarMesa() {
+  if (!confirm('¿Cerrar esta mesa?')) return;
+  const res = await fetch('/mesero/mesa/cerrar/', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body: JSON.stringify({mesa_id:currentMesaId}) });
+  const d = await res.json();
+  if (d.ok) { showToast('Mesa cerrada', 'success'); closePanel(); pollMesas(); }
+}
+
+async function entregarPedido(id) {
+  const res = await fetch('/mesero/pedidos/entregar/', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body: JSON.stringify({pedido_id:id}) });
+  const d = await res.json();
+  if (d.ok) { showToast('Pedido entregado', 'success'); selectMesa(currentMesaId, null, true); }
+}
+
+function abrirCancelar(id) {
+  document.getElementById('cancelarPedidoId').value = id;
+  document.getElementById('cancelarMotivo').value = '';
+  new bootstrap.Modal(document.getElementById('cancelarModal')).show();
+}
+
+async function confirmarCancelacion() {
+  const id = document.getElementById('cancelarPedidoId').value;
+  const motivo = document.getElementById('cancelarMotivo').value.trim();
+  if (!motivo) { document.getElementById('cancelarMotivo').style.borderColor = 'var(--mm-danger)'; return; }
+  const res = await fetch('{% url "gerente:cancelar_pedido" %}', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body: JSON.stringify({pedido_id:id, motivo}) });
+  const d = await res.json();
+  if (d.ok) { bootstrap.Modal.getInstance(document.getElementById('cancelarModal')).hide(); showToast('Pedido cancelado', 'success'); selectMesa(currentMesaId, null, true); }
+}
+
+function abrirPago(mesaId, total) {
+  // Redirect to mesero pago view
+  window.location.href = `/mesero/pago/?mesa=${mesaId}`;
+}
+
+function abrirAsistido(sesionId, alias) {
+  asistidoSesionId = sesionId; asistidoCart = [];
+  document.getElementById('asistidoTitle').textContent = `Pedido asistido · ${alias}`;
+  document.getElementById('asistidoSubtitle').textContent = `Mesa ${panelData?.numero_mesa}`;
+  document.getElementById('asistidoCartSummary').style.display = 'none';
+  document.getElementById('btnConfirmarAsistido').disabled = true;
+  // Fetch products
+  fetch('/gerente/menu/productos/?format=json').then(r => r.text()).then(() => {
+    document.getElementById('asistidoProductsContainer').innerHTML = '<p style="color:var(--mm-text-muted); font-size:.875rem;">Carga el menú desde Gestión de Menú para usar pedido asistido aquí.</p>';
+  });
+  new bootstrap.Modal(document.getElementById('asistidoModal')).show();
+}
+
+async function confirmarAsistido() {
+  if (!asistidoSesionId || !asistidoCart.length) return;
+  const res = await fetch('/mesero/asistido/confirmar/', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body: JSON.stringify({sesion_id:asistidoSesionId, items:asistidoCart}) });
+  const d = await res.json();
+  if (d.ok) { bootstrap.Modal.getInstance(document.getElementById('asistidoModal')).hide(); showToast('Pedido enviado', 'success'); selectMesa(currentMesaId, null, true); }
+}
+
+function abrirAgregarCliente() { showToast('Función disponible en el módulo mesero', ''); }
+</script>
+{% endblock %}

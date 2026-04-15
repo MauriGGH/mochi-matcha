@@ -39,4 +39,5 @@ Thumbs.db
 # =========================
 # FRONTEND (SI USAN REACT)
 # =========================
-node_modules/
+node_modules/.env
+*.sqlite3

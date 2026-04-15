@@ -1,0 +1,366 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kitchen Display — Mochi Matcha</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  {% load static %}
+  <link href="{% static 'css/mochi.css' %}" rel="stylesheet">
+  <link href="{% static 'css/staff.css' %}" rel="stylesheet">
+</head>
+<body class="kds-body">
+
+<!-- KDS Header -->
+<header class="kds-header">
+  <div class="d-flex align-items-center gap-3">
+    <span style="font-size:1.25rem;">🍵</span>
+    <div>
+      <span style="font-weight:700; font-size:.9rem;">Kitchen Display</span>
+      <span style="color:#888; font-size:.8rem; margin-left:.4rem;">Mochi Matcha</span>
+    </div>
+    <!-- Area tabs -->
+    <div class="d-flex gap-1 ms-2">
+      <a href="{% url 'cocina:kds' %}?area=cocina"
+         class="btn btn-sm {% if area == 'cocina' %}btn-primary{% else %}btn-outline-secondary border-0{% endif %} px-3"
+         style="font-size:.8rem; {% if area != 'cocina' %}color:#aaa; background:#2a2a2a;{% endif %}">
+        <i class="bi bi-fire me-1"></i>Cocina
+      </a>
+      <a href="{% url 'cocina:kds' %}?area=bar"
+         class="btn btn-sm {% if area == 'bar' %}btn-primary{% else %}btn-outline-secondary border-0{% endif %} px-3"
+         style="font-size:.8rem; {% if area != 'bar' %}color:#aaa; background:#2a2a2a;{% endif %}">
+        <i class="bi bi-cup-straw me-1"></i>Bar
+      </a>
+    </div>
+    <!-- Counters -->
+    <div class="d-flex gap-2 ms-2">
+      <span class="badge rounded-pill px-3 py-2" style="background:#2a2a2a; color:var(--kds-yellow); font-size:.78rem;">
+        <i class="bi bi-clock me-1"></i>Pendientes <span id="pendCount">{{ pendientes_count }}</span>
+      </span>
+      <span class="badge rounded-pill px-3 py-2" style="background:#2a2a2a; color:var(--kds-green); font-size:.78rem;">
+        <i class="bi bi-check2-circle me-1"></i>Listos <span id="doneCount">{{ listos_count }}</span>
+      </span>
+    </div>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <!-- Semaphore legend -->
+    <div class="d-flex align-items-center gap-2" style="font-size:.72rem;">
+      <span style="color:var(--kds-green);">● 0–<span id="legGreen">5</span> min</span>
+      <span style="color:var(--kds-yellow);">● <span id="legYellow">5</span>–<span id="legRed">10</span> min</span>
+      <span style="color:var(--kds-red);">● +<span id="legRedVal">10</span> min</span>
+    </div>
+    <button class="btn btn-sm" style="background:#2a2a2a; color:#aaa; border:none;" onclick="openSettings()">
+      <i class="bi bi-gear"></i>
+    </button>
+    <span style="font-size:.8rem; color:#666;" id="kds-clock"></span>
+    <a href="{% url 'cocina:logout_cocina' %}" style="color:#666; text-decoration:none; font-size:.8rem;">Salir</a>
+  </div>
+</header>
+
+<!-- KDS Columns -->
+<div class="kds-columns">
+  <!-- Pending column -->
+  <div class="kds-column">
+    <div class="kds-col-header pending">
+      <i class="bi bi-hourglass-split me-2"></i>{{ area|title }} — Pedidos Pendientes
+    </div>
+    <div class="kds-col-body" id="pendingCol">
+      {% for pedido in pedidos %}
+      <div class="kds-card" id="ticket-{{ pedido.pk }}" data-ts="{{ pedido.fecha_hora_ingreso|date:'U' }}">
+        <div class="kds-card-header">
+          <div class="d-flex align-items-center gap-2">
+            <span class="kds-table-badge">Mesa {{ pedido.sesion.mesa.numero_mesa }}</span>
+            <span style="font-size:.8rem; color:#ccc;">{{ pedido.sesion.alias }}</span>
+          </div>
+          <span class="kds-timer green" id="timer-{{ pedido.pk }}">0:00</span>
+        </div>
+        <div class="kds-items">
+          {% for d in pedido.detalles.all %}
+          <div class="kds-item">
+            <div>
+              <span class="kds-item-qty">{{ d.cantidad }}×</span>{{ d.producto.nombre }}
+              {% if d.modificadores.all %}
+              <div class="kds-item-mods">{% for m in d.modificadores.all %}{{ m.opcion.nombre_opcion }}{% if not forloop.last %} · {% endif %}{% endfor %}</div>
+              {% endif %}
+              {% if d.notas %}
+              <div class="kds-item-notes" style="color:#e74c3c; font-weight:600;">⚠ {{ d.notas|upper }}</div>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="d-flex gap-2">
+          {% if pedido.estado == 'recibido' %}
+          <button class="btn-listo" onclick="marcarListo({{ pedido.pk }}, this)">
+            <i class="bi bi-check-circle me-2"></i>Marcar como Listo
+          </button>
+          {% else %}
+          <button class="btn-listo" onclick="marcarListo({{ pedido.pk }}, this)">
+            <i class="bi bi-check2-all me-2"></i>Listo para entregar
+          </button>
+          {% endif %}
+        </div>
+      </div>
+      {% empty %}
+      <div class="text-center py-5" style="color:#555;">
+        <div style="font-size:2.5rem; margin-bottom:.75rem;">✅</div>
+        <div style="font-size:.875rem;">Sin pedidos pendientes</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Done column -->
+  <div class="kds-column">
+    <div class="kds-col-header done">
+      <i class="bi bi-check2-circle me-2"></i>Listos para Entrega
+    </div>
+    <div class="kds-col-body" id="doneCol">
+      {% for pedido in pedidos_listos %}
+      <div style="background:#1e1e1e; border-radius:var(--radius-sm); padding:.75rem 1rem; border-left:3px solid var(--kds-green); margin-bottom:.5rem;" id="done-{{ pedido.pk }}">
+        <div class="d-flex align-items-center justify-content-between mb-1">
+          <div class="d-flex align-items-center gap-2">
+            <span class="kds-table-badge">Mesa {{ pedido.sesion.mesa.numero_mesa }}</span>
+            <span style="font-size:.8rem; color:#aaa;">{{ pedido.sesion.alias }}</span>
+          </div>
+          <i class="bi bi-check-circle-fill" style="color:var(--kds-green);"></i>
+        </div>
+        <div style="font-size:.8rem; color:#888;">
+          {% for d in pedido.detalles.all %}
+          {{ d.cantidad }}× {{ d.producto.nombre }}{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </div>
+        <div style="font-size:.72rem; color:#555; margin-top:.25rem;">El mesero registra la entrega desde su panel</div>
+      </div>
+      {% empty %}
+      <div class="text-center py-5" style="color:#555;">
+        <div style="font-size:2rem; margin-bottom:.5rem;">🍽️</div>
+        <div style="font-size:.875rem;">Nada listo aún</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal fade" id="settingsModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:400px;">
+    <div class="modal-content rounded-4 border-0" style="background:#1e1e1e; color:#fff;">
+      <div class="modal-body p-4">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <i class="bi bi-gear"></i>
+          <h5 class="mb-0 fw-bold">Semáforo de Tiempos</h5>
+          <button class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+        </div>
+        <p style="font-size:.85rem; color:#999; margin-bottom:1.5rem;">Configura los umbrales de tiempo (en minutos) para los indicadores de color de los tickets.</p>
+
+        <div class="mb-3 p-3 rounded-3" style="background:#2a2a2a;">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span style="color:var(--kds-green); font-size:.8rem;">●</span>
+            <span style="color:var(--kds-green); font-size:.875rem; font-weight:600;">VERDE — A tiempo</span>
+          </div>
+          <div style="font-size:.8rem; color:#888;">De 0 a <span id="greenMax">5</span> min</div>
+        </div>
+
+        <div class="mb-3 p-3 rounded-3" style="background:#2a2a2a;">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="d-flex align-items-center gap-2">
+              <span style="color:var(--kds-yellow);">●</span>
+              <span style="color:var(--kds-yellow); font-size:.875rem; font-weight:600;">AMARILLO — Advertencia</span>
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span style="font-size:.8rem; color:#888;">A partir de los</span>
+            <input type="number" id="yellowThresh" min="1" max="30" value="5" class="form-control form-control-sm text-center" style="width:60px; background:#333; border-color:#444; color:#fff;">
+            <span style="font-size:.8rem; color:#888;">min</span>
+          </div>
+        </div>
+
+        <div class="mb-4 p-3 rounded-3" style="background:#2a2a2a;">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="d-flex align-items-center gap-2">
+              <span style="color:var(--kds-red);">●</span>
+              <span style="color:var(--kds-red); font-size:.875rem; font-weight:600;">ROJO — Retrasado</span>
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span style="font-size:.8rem; color:#888;">A partir de los</span>
+            <input type="number" id="redThresh" min="1" max="60" value="10" class="form-control form-control-sm text-center" style="width:60px; background:#333; border-color:#444; color:#fff;">
+            <span style="font-size:.8rem; color:#888;">min</span>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button class="btn flex-grow-1 py-2" style="background:#333; color:#fff; border:none;" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-primary flex-grow-1 py-2" onclick="saveSettings()">Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const CSRF = document.cookie.split(';').find(c=>c.trim().startsWith('csrftoken='))?.split('=')[1] || '';
+const AREA = '{{ area }}';
+
+// Settings (persisted in localStorage)
+let settings = JSON.parse(localStorage.getItem('kds_settings') || '{"yellow":5,"red":10}');
+
+function applySettings() {
+  document.getElementById('yellowThresh').value = settings.yellow;
+  document.getElementById('redThresh').value = settings.red;
+  document.getElementById('greenMax').textContent = settings.yellow;
+  document.getElementById('legGreen').textContent = settings.yellow;
+  document.getElementById('legYellow').textContent = settings.yellow;
+  document.getElementById('legRed').textContent = settings.red;
+  document.getElementById('legRedVal').textContent = settings.red;
+}
+applySettings();
+
+function openSettings() {
+  new bootstrap.Modal(document.getElementById('settingsModal')).show();
+}
+function saveSettings() {
+  settings.yellow = parseInt(document.getElementById('yellowThresh').value);
+  settings.red = parseInt(document.getElementById('redThresh').value);
+  localStorage.setItem('kds_settings', JSON.stringify(settings));
+  applySettings();
+  bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+}
+
+// Clock
+function tickClock() {
+  const now = new Date();
+  document.getElementById('kds-clock').textContent = now.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+}
+tickClock(); setInterval(tickClock, 1000);
+
+// Timers
+const timestamps = {};
+document.querySelectorAll('.kds-card').forEach(card => {
+  const ts = parseInt(card.dataset.ts) * 1000;
+  if (ts) timestamps[card.id.replace('ticket-','')] = ts;
+});
+
+function updateTimers() {
+  const now = Date.now();
+  Object.entries(timestamps).forEach(([id, ts]) => {
+    const el = document.getElementById(`timer-${id}`);
+    const card = document.getElementById(`ticket-${id}`);
+    if (!el || !card) return;
+    const mins = Math.floor((now - ts) / 60000);
+    const secs = Math.floor(((now - ts) % 60000) / 1000);
+    el.textContent = `${mins}:${secs.toString().padStart(2,'0')}`;
+    if (mins >= settings.red) {
+      el.className = 'kds-timer red'; card.className = 'kds-card red';
+    } else if (mins >= settings.yellow) {
+      el.className = 'kds-timer yellow'; card.className = 'kds-card yellow';
+    } else {
+      el.className = 'kds-timer green'; card.className = 'kds-card';
+    }
+  });
+}
+setInterval(updateTimers, 1000);
+updateTimers();
+
+// Mark ready
+async function marcarListo(id, btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  try {
+    const res = await fetch('{% url "cocina:marcar_listo" %}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ pedido_id: id })
+    });
+    const data = await res.json();
+    if (data.ok) pollKDS();
+  } catch(e) { btn.disabled = false; }
+}
+
+// Polling
+async function pollKDS() {
+  try {
+    const res = await fetch(`{% url "cocina:pedidos_json" %}?area=${AREA}`);
+    const data = await res.json();
+    if (!data.ok) return;
+
+    // Update pending
+    const pendCol = document.getElementById('pendingCol');
+    document.getElementById('pendCount').textContent = data.pendientes.length;
+    document.getElementById('doneCount').textContent = data.listos.length;
+
+    data.pendientes.forEach(p => {
+      if (!document.getElementById(`ticket-${p.id}`)) {
+        // Add new ticket
+        const ts = new Date(p.fecha).getTime();
+        timestamps[p.id] = ts || Date.now();
+        const card = buildCard(p);
+        pendCol.insertAdjacentHTML('afterbegin', card);
+      }
+    });
+
+    // Remove completed from pending
+    document.querySelectorAll('#pendingCol .kds-card').forEach(card => {
+      const id = parseInt(card.id.replace('ticket-',''));
+      if (!data.pendientes.find(p => p.id === id)) card.remove();
+    });
+
+    // Update done column
+    const doneCol = document.getElementById('doneCol');
+    data.listos.forEach(p => {
+      if (!document.getElementById(`done-${p.id}`)) {
+        const items = p.items.map(i => `${i.cantidad}× ${i.nombre}`).join(', ');
+        doneCol.insertAdjacentHTML('beforeend', `
+          <div style="background:#1e1e1e; border-radius:var(--radius-sm); padding:.75rem 1rem; border-left:3px solid var(--kds-green); margin-bottom:.5rem;" id="done-${p.id}">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <div class="d-flex gap-2">
+                <span class="kds-table-badge">Mesa ${p.mesa}</span>
+                <span style="font-size:.8rem; color:#aaa;">${p.alias}</span>
+              </div>
+              <i class="bi bi-check-circle-fill" style="color:var(--kds-green);"></i>
+            </div>
+            <div style="font-size:.8rem; color:#888;">${items}</div>
+            <div style="font-size:.72rem; color:#555; margin-top:.25rem;">El mesero registra la entrega desde su panel</div>
+          </div>`);
+      }
+    });
+    document.querySelectorAll('#doneCol [id^="done-"]').forEach(card => {
+      const id = parseInt(card.id.replace('done-',''));
+      if (!data.listos.find(p => p.id === id)) card.remove();
+    });
+  } catch(e) {}
+}
+
+function buildCard(p) {
+  const items = p.items.map(i => `
+    <div class="kds-item">
+      <div>
+        <span class="kds-item-qty">${i.cantidad}×</span>${i.nombre}
+        ${i.modificadores.length ? `<div class="kds-item-mods">${i.modificadores.join(' · ')}</div>` : ''}
+        ${i.notas ? `<div class="kds-item-notes" style="color:#e74c3c; font-weight:600;">⚠ ${i.notas.toUpperCase()}</div>` : ''}
+      </div>
+    </div>`).join('');
+  return `<div class="kds-card" id="ticket-${p.id}" data-ts="${Math.floor(Date.now()/1000)}">
+    <div class="kds-card-header">
+      <div class="d-flex align-items-center gap-2">
+        <span class="kds-table-badge">Mesa ${p.mesa}</span>
+        <span style="font-size:.8rem; color:#ccc;">${p.alias}</span>
+      </div>
+      <span class="kds-timer green" id="timer-${p.id}">0:00</span>
+    </div>
+    <div class="kds-items">${items}</div>
+    <button class="btn-listo" onclick="marcarListo(${p.id}, this)">
+      <i class="bi bi-check-circle me-2"></i>Marcar como Listo
+    </button>
+  </div>`;
+}
+
+setInterval(pollKDS, 3000);
+</script>
+</body>
+</html>

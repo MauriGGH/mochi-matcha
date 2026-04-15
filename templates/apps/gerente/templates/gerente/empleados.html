@@ -1,0 +1,195 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+
+{% block title %}Empleados{% endblock %}
+{% block page_title %}Empleados{% endblock %}
+
+{% block sidebar_nav %}
+<a href="{% url 'gerente:floor_plan' %}"><i class="bi bi-grid-fill"></i> Floor Plan</a>
+<div class="nav-section-label">Gestión</div>
+<a href="{% url 'gerente:productos' %}"><i class="bi bi-basket-fill"></i> Gestión de Menú</a>
+<div class="nav-section-label">Reportes</div>
+<a href="{% url 'gerente:reportes' %}"><i class="bi bi-bar-chart-fill"></i> Reportes</a>
+<div class="nav-section-label">Admin</div>
+<a href="{% url 'gerente:empleados' %}" class="active"><i class="bi bi-people-fill"></i> Empleados</a>
+<a href="{% url 'gerente:configuracion' %}"><i class="bi bi-gear-fill"></i> Configuración</a>
+{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h5 class="fw-bold mb-0">Empleados</h5>
+    <p style="font-size:.8rem; color:var(--mm-text-muted); margin:0;">{{ activos|length }} activos · {{ inactivos|length }} inactivos</p>
+  </div>
+  <button class="btn btn-primary rounded-pill px-3" onclick="openNewEmpleado()">
+    <i class="bi bi-person-plus me-1"></i>Nuevo empleado
+  </button>
+</div>
+
+{% if activos %}
+<div class="mb-1" style="font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--mm-text-muted);">Activos ({{ activos|length }})</div>
+<div class="mb-4">
+  {% for emp in activos %}
+  <div style="border:1px solid var(--mm-border); border-radius:var(--radius-md); padding:1rem 1.25rem; margin-bottom:.5rem; background:var(--mm-white);" class="d-flex align-items-center gap-3">
+    <!-- Avatar -->
+    <div style="width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1rem; color:#fff; flex-shrink:0;
+        background:{% if emp.rol == 'gerente' or emp.rol == 'admin' %}var(--mm-gold){% elif emp.rol == 'cocina' %}#e67e22{% else %}var(--mm-green){% endif %};">
+      {{ emp.nombre|first|upper }}{{ emp.nombre|slice:"1:2"|upper }}
+    </div>
+    <!-- Info -->
+    <div class="flex-grow-1">
+      <div style="font-weight:600; font-size:.95rem;">{{ emp.nombre }}</div>
+      <div style="font-size:.78rem; color:var(--mm-text-muted);">@{{ emp.usuario }}
+        {% if emp.last_login %} · Desde {{ emp.last_login|date:"d/m/Y" }}{% endif %}
+      </div>
+    </div>
+    <!-- Role badge -->
+    <span style="background:{% if emp.rol == 'gerente' or emp.rol == 'admin' %}var(--mm-gold-pale){% elif emp.rol == 'cocina' %}#FEF3E7{% else %}var(--mm-green-pale){% endif %};
+                 color:{% if emp.rol == 'gerente' or emp.rol == 'admin' %}var(--mm-gold){% elif emp.rol == 'cocina' %}#e67e22{% else %}var(--mm-green){% endif %};
+                 border-radius:99px; padding:.2rem .75rem; font-size:.75rem; font-weight:700;">
+      {{ emp.get_rol_display }}
+    </span>
+    <!-- Actions -->
+    <div class="d-flex gap-1">
+      <button class="btn btn-link btn-sm p-1" onclick="openEditEmpleado({{ emp.id_empleado }}, '{{ emp.nombre|escapejs }}', '{{ emp.usuario|escapejs }}', '{{ emp.rol }}')" title="Editar">
+        <i class="bi bi-pencil" style="color:var(--mm-text-muted);"></i>
+      </button>
+      <button class="btn btn-link btn-sm p-1" onclick="toggleEmpleado({{ emp.id_empleado }}, true)" title="Desactivar">
+        <i class="bi bi-person-x" style="color:var(--mm-danger);"></i>
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if inactivos %}
+<div class="mb-1" style="font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--mm-text-muted);">Inactivos ({{ inactivos|length }})</div>
+<div>
+  {% for emp in inactivos %}
+  <div style="border:1px solid var(--mm-border); border-radius:var(--radius-md); padding:1rem 1.25rem; margin-bottom:.5rem; background:var(--mm-white); opacity:.6;" class="d-flex align-items-center gap-3">
+    <div style="width:44px; height:44px; border-radius:50%; background:#ccc; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1rem; color:#fff; flex-shrink:0;">
+      {{ emp.nombre|first|upper }}{{ emp.nombre|slice:"1:2"|upper }}
+    </div>
+    <div class="flex-grow-1">
+      <div style="font-weight:600; font-size:.95rem; color:var(--mm-text-muted);">{{ emp.nombre }}</div>
+      <div style="font-size:.78rem; color:var(--mm-text-muted);">@{{ emp.usuario }}</div>
+    </div>
+    <span style="background:var(--mm-cream-dark); color:var(--mm-text-muted); border-radius:99px; padding:.2rem .75rem; font-size:.75rem; font-weight:700;">
+      {{ emp.get_rol_display }}
+    </span>
+    <button class="btn btn-link btn-sm p-1" onclick="toggleEmpleado({{ emp.id_empleado }}, false)" title="Reactivar">
+      <i class="bi bi-person-check" style="color:var(--mm-green);"></i>
+    </button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if not activos and not inactivos %}
+<div class="text-center py-5" style="color:var(--mm-text-muted);">
+  <div style="font-size:3rem; margin-bottom:1rem;">👥</div>
+  <h6 class="fw-bold mb-1">No hay empleados registrados</h6>
+  <p style="font-size:.875rem;">Crea el primer empleado con el botón de arriba</p>
+</div>
+{% endif %}
+
+<!-- Modal: Nuevo empleado -->
+<div class="modal fade" id="empModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:440px;">
+    <div class="modal-content rounded-4 border-0">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="empModalTitle">Nuevo empleado</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-4">
+        <form id="empForm" method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:.85rem;">Nombre completo <span class="text-danger">*</span></label>
+            <input type="text" name="nombre" id="eNombre" required class="form-control" style="border-color:var(--mm-border);" placeholder="ej. Ana García">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:.85rem;">Usuario <span class="text-danger">*</span></label>
+            <input type="text" name="usuario" id="eUsuario" required class="form-control" style="border-color:var(--mm-border);" placeholder="ej. ana.garcia" autocomplete="off">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:.85rem;">Contraseña <span id="passRequired" class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="password" name="password" id="ePassword" class="form-control" style="border-color:var(--mm-border); border-right:none;" placeholder="••••••••" autocomplete="new-password">
+              <button type="button" class="input-group-text btn" style="background:var(--mm-cream); border-color:var(--mm-border); cursor:pointer;" onclick="toggleEmpPass()">
+                <i class="bi bi-eye" id="empPassEye"></i>
+              </button>
+            </div>
+            <div id="passHint" style="font-size:.75rem; color:var(--mm-text-muted); margin-top:.25rem; display:none;">Deja vacío para mantener la contraseña actual</div>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold" style="font-size:.85rem;">Rol <span class="text-danger">*</span></label>
+            <select name="rol" id="eRol" required class="form-select" style="border-color:var(--mm-border);">
+              <option value="mesero">Mesero</option>
+              <option value="cocina">Cocina</option>
+              <option value="cajero">Cajero</option>
+              <option value="gerente">Gerente</option>
+            </select>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn flex-grow-1" style="background:var(--mm-cream-dark);" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary flex-grow-1">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF = getCsrf();
+
+function openNewEmpleado() {
+  document.getElementById('empModalTitle').textContent = 'Nuevo empleado';
+  document.getElementById('empForm').action = '{% url "gerente:empleados_nuevo" %}';
+  document.getElementById('eNombre').value = '';
+  document.getElementById('eUsuario').value = '';
+  document.getElementById('ePassword').value = '';
+  document.getElementById('eRol').value = 'mesero';
+  document.getElementById('eUsuario').readOnly = false;
+  document.getElementById('passRequired').style.display = 'inline';
+  document.getElementById('passHint').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('empModal')).show();
+}
+
+function openEditEmpleado(id, nombre, usuario, rol) {
+  document.getElementById('empModalTitle').textContent = 'Editar empleado';
+  document.getElementById('empForm').action = `{% url "gerente:empleado_editar" 0 %}`.replace('/0/', `/${id}/`);
+  document.getElementById('eNombre').value = nombre;
+  document.getElementById('eUsuario').value = usuario;
+  document.getElementById('eUsuario').readOnly = true;
+  document.getElementById('ePassword').value = '';
+  document.getElementById('eRol').value = rol;
+  document.getElementById('passRequired').style.display = 'none';
+  document.getElementById('passHint').style.display = 'block';
+  new bootstrap.Modal(document.getElementById('empModal')).show();
+}
+
+async function toggleEmpleado(id, activo) {
+  const accion = activo ? 'desactivar' : 'reactivar';
+  if (!confirm(`¿${accion.charAt(0).toUpperCase() + accion.slice(1)} este empleado?`)) return;
+  const res = await fetch(`{% url "gerente:empleado_toggle" 0 %}`.replace('/0/', `/${id}/`), {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF }
+  });
+  const d = await res.json();
+  if (d.ok) location.reload();
+}
+
+function toggleEmpPass() {
+  const input = document.getElementById('ePassword');
+  const eye = document.getElementById('empPassEye');
+  input.type = input.type === 'password' ? 'text' : 'password';
+  eye.className = input.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+}
+</script>
+{% endblock %}

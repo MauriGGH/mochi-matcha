@@ -1,0 +1,147 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+
+{% block title %}Procesar pago{% endblock %}
+{% block page_title %}Pago{% endblock %}
+
+{% block sidebar_nav %}
+<a href="{% url 'mesero:mapa_mesas' %}"><i class="bi bi-arrow-left"></i> Volver a mesas</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:560px; margin:0 auto;">
+
+  {% if not mesa %}
+  <div class="text-center py-5" style="color:var(--mm-text-muted);">
+    <div style="font-size:2.5rem; margin-bottom:1rem;">🔍</div>
+    <h6 class="fw-bold">No se especificó una mesa</h6>
+    <a href="{% url 'mesero:mapa_mesas' %}" class="btn btn-primary mt-3">Ir al mapa de mesas</a>
+  </div>
+  {% else %}
+
+  <!-- Header de mesa -->
+  <div style="background:var(--mm-white); border:1px solid var(--mm-border); border-radius:var(--radius-md); padding:1.25rem; margin-bottom:1.25rem;" class="d-flex align-items-center justify-content-between">
+    <div>
+      <h5 class="fw-bold mb-0">Mesa {{ mesa.numero_mesa }}</h5>
+      {% if mesa.ubicacion %}<div style="font-size:.8rem; color:var(--mm-text-muted);">{{ mesa.ubicacion }}</div>{% endif %}
+    </div>
+    {% if mesa.pin_actual %}
+    <div style="font-family:var(--font-mono); font-size:1.5rem; font-weight:700; letter-spacing:.2em; color:var(--mm-green); background:var(--mm-green-pale); padding:.4rem .9rem; border-radius:var(--radius-sm);">{{ mesa.pin_actual }}</div>
+    {% endif %}
+  </div>
+
+  <!-- Resumen del consumo -->
+  {% if pedidos %}
+  <div style="background:var(--mm-white); border:1px solid var(--mm-border); border-radius:var(--radius-md); padding:1.25rem; margin-bottom:1.25rem;">
+    <h6 class="fw-bold mb-3">Resumen de consumo</h6>
+    {% for pedido in pedidos %}
+    <div class="mb-2" style="padding-bottom:.5rem; border-bottom:1px solid var(--mm-border);">
+      <div class="d-flex justify-content-between" style="font-size:.82rem; color:var(--mm-text-muted);">
+        <span>Pedido #{{ pedido.pk }} · {{ pedido.sesion.alias }}</span>
+        <span>{{ pedido.fecha_hora_ingreso|date:"H:i" }}</span>
+      </div>
+      {% for d in pedido.detalles.all %}
+      <div class="d-flex justify-content-between" style="font-size:.875rem; padding:.2rem 0;">
+        <span>{{ d.cantidad }}× {{ d.producto.nombre }}</span>
+        <span style="font-weight:600;">${{ d.subtotal_calculado|floatformat:2 }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+
+    <!-- Totales -->
+    <div class="d-flex justify-content-between mt-2" style="font-size:.875rem; color:var(--mm-text-muted);">
+      <span>Subtotal</span>
+      <span>${{ total|floatformat:2 }}</span>
+    </div>
+    <div class="d-flex justify-content-between fw-bold mt-1" style="font-size:1.1rem;">
+      <span>Total</span>
+      <span style="color:var(--mm-green);">${{ total|floatformat:2 }}</span>
+    </div>
+  </div>
+  {% else %}
+  <div style="background:var(--mm-white); border:1px solid var(--mm-border); border-radius:var(--radius-md); padding:2rem; margin-bottom:1.25rem; text-align:center; color:var(--mm-text-muted);">
+    <div style="font-size:2rem; margin-bottom:.5rem;">📋</div>
+    <p style="font-size:.875rem; margin:0;">Sin pedidos registrados en esta mesa</p>
+  </div>
+  {% endif %}
+
+  <!-- Formulario de pago -->
+  <div style="background:var(--mm-white); border:1px solid var(--mm-border); border-radius:var(--radius-md); padding:1.5rem; margin-bottom:1.25rem;">
+    <h6 class="fw-bold mb-3">Método de pago</h6>
+    <form method="post" action="{% url 'mesero:procesar_pago' %}" id="pagoForm">
+      {% csrf_token %}
+      <input type="hidden" name="mesa_id" value="{{ mesa.pk }}">
+      <input type="hidden" name="metodo_pago_id" id="metodoPagoId" value="{% if metodos %}{{ metodos.first.id }}{% endif %}">
+
+      <div class="mb-4">
+        {% for metodo in metodos %}
+        <label style="display:flex; align-items:center; gap:.75rem; padding:.85rem 1rem; border:1.5px solid var(--mm-border); border-radius:var(--radius-sm); margin-bottom:.5rem; cursor:pointer; transition:all .15s;" class="metodo-option" onclick="selectMetodo({{ metodo.id }}, this)">
+          <input type="radio" name="metodo_display" value="{{ metodo.id }}" {% if forloop.first %}checked{% endif %} style="display:none;">
+          <span style="font-size:1.1rem;">{% if 'Efectivo' in metodo.descripcion %}💵{% elif 'Tarjeta' in metodo.descripcion %}💳{% else %}🔀{% endif %}</span>
+          <span style="font-weight:600;">{{ metodo.descripcion }}</span>
+        </label>
+        {% empty %}
+        <p style="color:var(--mm-text-muted); font-size:.875rem;">Sin métodos de pago configurados. Ve al admin para agregar.</p>
+        {% endfor %}
+      </div>
+
+      <!-- Monto recibido (efectivo) -->
+      <div class="mb-4" id="montoContainer">
+        <label class="form-label fw-semibold" style="font-size:.875rem;">Monto recibido</label>
+        <div class="input-group">
+          <span class="input-group-text" style="background:var(--mm-cream); border-color:var(--mm-border); font-weight:700;">$</span>
+          <input type="number" id="montoRecibido" class="form-control" placeholder="0.00" step="0.01" min="0"
+                 style="border-color:var(--mm-border); font-size:1.1rem; font-weight:600;" oninput="calcCambio()">
+        </div>
+        <div id="cambioInfo" style="display:none; margin-top:.5rem; padding:.6rem .9rem; background:var(--mm-green-pale); border-radius:var(--radius-sm);">
+          <span style="font-size:.875rem; color:var(--mm-green); font-weight:600;">Cambio: <span id="cambioVal">$0.00</span></span>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary w-100 py-3 fw-bold" style="font-size:1.05rem;">
+        <i class="bi bi-cash-coin me-2"></i>Confirmar pago — ${{ total|floatformat:2 }}
+      </button>
+    </form>
+  </div>
+
+  <a href="{% url 'mesero:mapa_mesas' %}" class="btn w-100 py-2" style="background:var(--mm-cream-dark); color:var(--mm-text-muted);">
+    <i class="bi bi-arrow-left me-1"></i>Cancelar y volver
+  </a>
+
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const TOTAL = parseFloat("{{ total|floatformat:2 }}") || 0;
+
+// Highlight first method
+document.querySelector('.metodo-option')?.style.setProperty('border-color', 'var(--mm-green)');
+document.querySelector('.metodo-option')?.style.setProperty('background', 'var(--mm-green-pale)');
+
+function selectMetodo(id, el) {
+  document.getElementById('metodoPagoId').value = id;
+  document.querySelectorAll('.metodo-option').forEach(opt => {
+    opt.style.borderColor = 'var(--mm-border)';
+    opt.style.background = 'transparent';
+  });
+  el.style.borderColor = 'var(--mm-green)';
+  el.style.background = 'var(--mm-green-pale)';
+  el.querySelector('input').checked = true;
+}
+
+function calcCambio() {
+  const recibido = parseFloat(document.getElementById('montoRecibido').value) || 0;
+  const cambioInfo = document.getElementById('cambioInfo');
+  if (recibido >= TOTAL) {
+    cambioInfo.style.display = 'block';
+    document.getElementById('cambioVal').textContent = '$' + (recibido - TOTAL).toFixed(2);
+  } else {
+    cambioInfo.style.display = 'none';
+  }
+}
+</script>
+{% endblock %}

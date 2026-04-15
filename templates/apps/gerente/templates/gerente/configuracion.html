@@ -1,0 +1,162 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+
+{% block title %}Configuración{% endblock %}
+{% block page_title %}Configuración{% endblock %}
+
+{% block sidebar_nav %}
+<a href="{% url 'gerente:floor_plan' %}"><i class="bi bi-grid-fill"></i> Floor Plan</a>
+<div class="nav-section-label">Gestión</div>
+<a href="{% url 'gerente:productos' %}"><i class="bi bi-basket-fill"></i> Gestión de Menú</a>
+<div class="nav-section-label">Reportes</div>
+<a href="{% url 'gerente:reportes' %}"><i class="bi bi-bar-chart-fill"></i> Reportes</a>
+<div class="nav-section-label">Admin</div>
+<a href="{% url 'gerente:empleados' %}"><i class="bi bi-people-fill"></i> Empleados</a>
+<a href="{% url 'gerente:configuracion' %}" class="active"><i class="bi bi-gear-fill"></i> Configuración</a>
+{% endblock %}
+
+{% block topbar_actions %}
+{% if listos_count > 0 %}
+<span class="btn btn-sm rounded-pill px-3" style="background:var(--mm-green-pale); color:var(--mm-green); font-size:.78rem;">
+  <i class="bi bi-check2-circle me-1"></i>{{ listos_count }} listos
+</span>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div style="max-width:680px;">
+
+  <!-- Modo mantenimiento -->
+  <div style="background:var(--mm-white); border:1px solid var(--mm-border); border-radius:var(--radius-md); padding:1.5rem; margin-bottom:1.25rem;">
+    <h6 class="fw-bold mb-1">Modo de mantenimiento</h6>
+    <p style="font-size:.875rem; color:var(--mm-text-muted); margin-bottom:1.25rem;">Activa una pantalla informativa para los clientes mientras realizas actualizaciones.</p>
+
+    <div style="border:1px solid var(--mm-border); border-radius:var(--radius-sm); padding:1rem; margin-bottom:1.25rem;"
+         class="d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-3">
+        <div style="width:40px;height:40px;background:var(--mm-cream-dark);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">⏸</div>
+        <div>
+          <div style="font-weight:600;font-size:.9rem;">Modo mantenimiento</div>
+          <div style="font-size:.78rem;color:var(--mm-text-muted);" id="maintenanceLabel">Inactivo — restaurante operando con normalidad</div>
+        </div>
+      </div>
+      <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" id="maintenanceToggle"
+               onchange="toggleMaintenance(this)"
+               style="cursor:pointer;width:2.75em;height:1.35em;accent-color:var(--mm-green);">
+      </div>
+    </div>
+
+    <div>
+      <label class="form-label fw-semibold" style="font-size:.875rem;">Mensaje personalizado</label>
+      <textarea id="maintenanceMsg" class="form-control" rows="3"
+                style="border-color:var(--mm-border);resize:none;font-size:.875rem;">Estamos realizando mejoras. Volvemos en breve. 🍵</textarea>
+      <p style="font-size:.75rem;color:var(--mm-text-muted);margin-top:.35rem;">Este mensaje se mostrará a los clientes cuando intenten acceder.</p>
+    </div>
+  </div>
+
+  <!-- Semáforo KDS -->
+  <div style="background:var(--mm-white);border:1px solid var(--mm-border);border-radius:var(--radius-md);padding:1.5rem;margin-bottom:1.5rem;">
+    <h6 class="fw-bold mb-1">Umbrales del semáforo (KDS)</h6>
+    <p style="font-size:.875rem;color:var(--mm-text-muted);margin-bottom:1.5rem;">Configura los tiempos de advertencia y crítico para el sistema de display de cocina.</p>
+
+    <div class="row g-4 mb-3">
+      <div class="col-md-6">
+        <label class="d-flex align-items-center gap-2 mb-2" style="font-size:.875rem;font-weight:600;">
+          <span style="width:12px;height:12px;border-radius:50%;background:#F39C12;display:inline-block;"></span>
+          Tiempo de advertencia
+        </label>
+        <div class="d-flex align-items-center gap-3">
+          <input type="range" id="yellowSlider" min="1" max="30" value="8"
+                 class="form-range flex-grow-1" oninput="updateSliders()"
+                 style="accent-color:#F39C12;">
+          <div style="min-width:56px;text-align:center;font-weight:700;background:var(--mm-cream-dark);border-radius:var(--radius-sm);padding:.3rem .5rem;">
+            <span id="yellowVal">8</span> <span style="font-size:.7rem;font-weight:400;">min</span>
+          </div>
+        </div>
+        <p style="font-size:.75rem;color:var(--mm-text-muted);margin-top:.3rem;">Ticket se vuelve ámbar después de <span id="yellowDesc">8</span> minutos</p>
+      </div>
+      <div class="col-md-6">
+        <label class="d-flex align-items-center gap-2 mb-2" style="font-size:.875rem;font-weight:600;">
+          <span style="width:12px;height:12px;border-radius:50%;background:#E74C3C;display:inline-block;"></span>
+          Tiempo crítico
+        </label>
+        <div class="d-flex align-items-center gap-3">
+          <input type="range" id="redSlider" min="1" max="60" value="15"
+                 class="form-range flex-grow-1" oninput="updateSliders()"
+                 style="accent-color:#E74C3C;">
+          <div style="min-width:56px;text-align:center;font-weight:700;background:var(--mm-cream-dark);border-radius:var(--radius-sm);padding:.3rem .5rem;">
+            <span id="redVal">15</span> <span style="font-size:.7rem;font-weight:400;">min</span>
+          </div>
+        </div>
+        <p style="font-size:.75rem;color:var(--mm-text-muted);margin-top:.3rem;">Ticket se vuelve rojo después de <span id="redDesc">15</span> minutos</p>
+      </div>
+    </div>
+
+    <!-- Preview -->
+    <div style="border:1px solid var(--mm-border);border-radius:var(--radius-sm);padding:1.25rem;background:var(--mm-cream);">
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mm-text-muted);margin-bottom:1rem;">Vista previa del semáforo</div>
+      <div class="d-flex align-items-center justify-content-between">
+        <div class="text-center" style="flex:0 0 auto;">
+          <div style="width:52px;height:52px;border-radius:50%;background:#27AE60;margin:0 auto .5rem;"></div>
+          <div style="font-size:.75rem;font-weight:600;color:#27AE60;">Normal</div>
+          <div style="font-size:.7rem;color:var(--mm-text-muted);">&lt;<span id="previewGreen">8</span>m</div>
+        </div>
+        <div style="flex:1;height:3px;background:linear-gradient(to right,#27AE60,#F39C12);margin:0 .75rem;border-radius:99px;"></div>
+        <div class="text-center" style="flex:0 0 auto;">
+          <div style="width:52px;height:52px;border-radius:50%;background:#F39C12;margin:0 auto .5rem;"></div>
+          <div style="font-size:.75rem;font-weight:600;color:#F39C12;">Alerta</div>
+          <div style="font-size:.7rem;color:var(--mm-text-muted);"><span id="previewY1">8</span>–<span id="previewY2">15</span>m</div>
+        </div>
+        <div style="flex:1;height:3px;background:linear-gradient(to right,#F39C12,#E74C3C);margin:0 .75rem;border-radius:99px;"></div>
+        <div class="text-center" style="flex:0 0 auto;">
+          <div style="width:52px;height:52px;border-radius:50%;background:#E74C3C;margin:0 auto .5rem;"></div>
+          <div style="font-size:.75rem;font-weight:600;color:#E74C3C;">Crítico</div>
+          <div style="font-size:.7rem;color:var(--mm-text-muted);">&gt;<span id="previewRed">15</span>m</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save -->
+  <button class="btn btn-primary w-100 py-3 fw-bold" style="font-size:1rem;" onclick="guardarConfig()">
+    <i class="bi bi-floppy2 me-2"></i>Guardar configuración
+  </button>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const saved = JSON.parse(localStorage.getItem('kds_settings') || '{"yellow":8,"red":15}');
+document.getElementById('yellowSlider').value = saved.yellow;
+document.getElementById('redSlider').value = saved.red;
+updateSliders();
+
+function updateSliders() {
+  const y = +document.getElementById('yellowSlider').value;
+  const r = +document.getElementById('redSlider').value;
+  document.getElementById('yellowVal').textContent = y;
+  document.getElementById('redVal').textContent = r;
+  document.getElementById('yellowDesc').textContent = y;
+  document.getElementById('redDesc').textContent = r;
+  document.getElementById('previewGreen').textContent = y;
+  document.getElementById('previewY1').textContent = y;
+  document.getElementById('previewY2').textContent = r;
+  document.getElementById('previewRed').textContent = r;
+}
+
+function toggleMaintenance(cb) {
+  document.getElementById('maintenanceLabel').textContent = cb.checked
+    ? 'Activo — los clientes verán la pantalla de mantenimiento'
+    : 'Inactivo — restaurante operando con normalidad';
+}
+
+function guardarConfig() {
+  const y = +document.getElementById('yellowSlider').value;
+  const r = +document.getElementById('redSlider').value;
+  localStorage.setItem('kds_settings', JSON.stringify({yellow:y, red:r}));
+  showToast('Configuración guardada ✓', 'success');
+}
+</script>
+{% endblock %}
