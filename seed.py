@@ -1,7 +1,7 @@
 """
 seed.py — Pobla la base de datos de Mochi Matcha con datos de prueba.
 Ejecutar desde la raíz del proyecto:
-    python manage.py shell < seed.py
+   docker-compose exec web python manage.py shell -c "exec(open('seed.py').read())"
 """
 import uuid
 from decimal import Decimal
