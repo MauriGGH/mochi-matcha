@@ -15,3 +15,6 @@ djangorestframework==3.14.0
 
 # (Opcional) Para logs y manejo de configuración
 dj-database-url==2.1.0
+
+# Generador de Qr codes para el menú digital
+qrcode[pil]==7.4.2

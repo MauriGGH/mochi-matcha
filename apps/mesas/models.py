@@ -1,6 +1,10 @@
 from django.db import models
 from apps.accounts.models import Empleado
 from apps.catalogs.models import ModalidadIngreso
+import qrcode
+from io import BytesIO
+import base64
+from django.urls import reverse
 
 
 class Mesa(models.Model):
@@ -28,6 +32,36 @@ class Mesa(models.Model):
     def __str__(self):
         return f"Mesa {self.numero_mesa}"
 
+    # ─── Métodos para QR ──────────────────────────────────────────────
+    def get_qr_url(self):
+        """Devuelve la URL relativa que debe contener el QR"""
+        return reverse('cliente:bienvenida') + f'?mesa={self.pk}'
+
+    def generate_qr_base64(self):
+        """Genera QR en base64 para mostrar en el admin"""
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=2,
+        )
+        # Cambia localhost por tu dominio en producción
+        base_url = "http://localhost:8000"
+        full_url = base_url + self.get_qr_url()
+        qr.add_data(full_url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        return base64.b64encode(buffer.getvalue()).decode()
+
+    def save(self, *args, **kwargs):
+        # Generar código QR único si no existe
+        if not self.codigo_qr:
+            import uuid
+            self.codigo_qr = f"mesa-{self.numero_mesa}-{uuid.uuid4().hex[:8]}"
+        super().save(*args, **kwargs)
+
 
 class SesionCliente(models.Model):
     ESTADOS = [
@@ -46,9 +80,6 @@ class SesionCliente(models.Model):
     )
 
     class Meta:
-        # FIX: eliminado unique_together (mesa, alias) que impedía reutilizar
-        # alias cuando la mesa se liberaba y volvía a ocuparse.
-        # La unicidad se valida en la vista filtrando solo estado='activa'.
         verbose_name = "Sesión de cliente"
         verbose_name_plural = "Sesiones de clientes"
 
