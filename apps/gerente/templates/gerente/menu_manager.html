@@ -176,10 +176,12 @@
         <td style="font-weight:700;">Mesa {{ mesa.numero_mesa }}</td>
         <td><i class="bi bi-people me-1" style="color:var(--mm-text-muted);"></i>{{ mesa.capacidad }}</td>
         <td style="color:var(--mm-text-muted);">{{ mesa.ubicacion|default:"—" }}</td>
-        <td><code style="font-size:.72rem;background:var(--mm-cream-dark);padding:.15rem .4rem;border-radius:4px;">{{ mesa.codigo_qr }}</code></td>
+        <td>
+          <img src="data:image/png;base64,{{ mesa.generate_qr_base64 }}" width="50" height="50" style="border-radius:6px;" alt="QR Mesa {{ mesa.numero_mesa }}">
+        </td>
         <td>{% if mesa.estado == 'libre' %}<span style="background:var(--mm-cream-dark);color:var(--mm-text-muted);border-radius:99px;padding:.2rem .7rem;font-size:.75rem;">Libre</span>{% else %}<span style="background:var(--mm-green-pale);color:var(--mm-green);border-radius:99px;padding:.2rem .7rem;font-size:.75rem;font-weight:600;">Ocupada</span>{% endif %}</td>
         <td>
-          <button class="btn btn-link btn-sm p-1" onclick="showQR('{{ mesa.codigo_qr }}',{{ mesa.numero_mesa }})" title="Ver QR"><i class="bi bi-qr-code" style="color:var(--mm-green);font-size:1.1rem;"></i></button>
+          <button class="btn btn-link btn-sm p-1" onclick="showQR('{{ mesa.generate_qr_base64 }}', {{ mesa.id }})" title="Ver QR"><i class="bi bi-qr-code" style="color:var(--mm-green);font-size:1.1rem;"></i></button>
           {% if mesa.estado == 'libre' %}<form method="post" action="{% url 'gerente:mesa_eliminar' mesa.id %}" style="display:inline;" onsubmit="return confirm('¿Eliminar Mesa {{ mesa.numero_mesa }}?')">{% csrf_token %}<button type="submit" class="btn btn-link btn-sm p-1"><i class="bi bi-trash3" style="color:var(--mm-danger);"></i></button></form>{% endif %}
         </td>
       </tr>
@@ -254,14 +256,14 @@
   </div>
 </div>
 
-<!-- Modal QR -->
+<!-- Modal QR (versión con imagen base64, sin librería externa) -->
 <div class="modal fade" id="qrModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width:300px;">
     <div class="modal-content rounded-4 border-0 text-center">
       <div class="modal-body p-4">
         <h6 class="fw-bold mb-3" id="qrTitle">QR Mesa</h6>
-        <canvas id="qrCanvas" style="border-radius:var(--radius-sm);border:2px solid var(--mm-border);"></canvas>
-        <p style="font-size:.72rem;color:var(--mm-text-muted);margin-top:.75rem;" id="qrUrl"></p>
+        <img id="qrModalImg" src="" alt="Código QR" style="border-radius:var(--radius-sm); border:2px solid var(--mm-border); width:220px; height:220px;">
+        <p style="font-size:.72rem; color:var(--mm-text-muted); margin-top:.75rem;" id="qrUrl"></p>
         <button class="btn btn-primary w-100 mt-2" onclick="downloadQR()"><i class="bi bi-download me-1"></i>Descargar QR</button>
         <button class="btn w-100 mt-2" style="background:var(--mm-cream-dark);" data-bs-dismiss="modal">Cerrar</button>
       </div>
@@ -271,7 +273,6 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script>
 const CSRF=getCsrf();
 function filterProducts(){const q=(document.getElementById('searchProd')?.value||'').toLowerCase(),cat=document.getElementById('filterCat')?.value||'';document.querySelectorAll('#productsTable tr').forEach(tr=>{tr.style.display=(!q||(tr.dataset.name||'').includes(q))&&(!cat||tr.dataset.cat===cat)?'':'none';});}
@@ -287,8 +288,30 @@ async function deleteGrupo(id){if(!confirm('¿Eliminar este grupo y todas sus op
 function openNewPromo(){new bootstrap.Modal(document.getElementById('promoModal')).show();}
 async function togglePromo(id,cb){const res=await fetch('{% url "gerente:promocion_toggle" 0 %}'.replace('/0/',`/${id}/`),{method:'POST',headers:{'X-CSRFToken':CSRF}});const d=await res.json();if(!d.ok){cb.checked=!cb.checked;showToast('Error','error');}else location.reload();}
 async function deletePromo(id){if(!confirm('¿Eliminar esta promoción?'))return;const res=await fetch('{% url "gerente:promocion_eliminar" 0 %}'.replace('/0/',`/${id}/`),{method:'POST',headers:{'X-CSRFToken':CSRF}});if((await res.json()).ok)location.reload();}
-let currentQRUrl='';
-function showQR(code,numero){const base=window.location.origin;currentQRUrl=`${base}/bienvenida/?mesa=${numero}`;document.getElementById('qrTitle').textContent=`QR Mesa ${numero}`;document.getElementById('qrUrl').textContent=currentQRUrl;const canvas=document.getElementById('qrCanvas');QRCode.toCanvas(canvas,currentQRUrl,{width:220,color:{dark:'#2A4A36',light:'#ffffff'}});new bootstrap.Modal(document.getElementById('qrModal')).show();}
-function downloadQR(){const canvas=document.getElementById('qrCanvas'),a=document.createElement('a');a.download=`qr-${document.getElementById('qrTitle').textContent.replace('QR ','').replace(' ','_')}.png`;a.href=canvas.toDataURL();a.click();}
+
+// --- Funciones QR (usando base64 del backend) ---
+function showQR(base64Data, mesaId) {
+    const base = window.location.origin;
+    const qrUrl = `${base}/bienvenida/?mesa=${mesaId}`;
+    
+    document.getElementById('qrTitle').textContent = `QR Mesa ${mesaId}`;
+    document.getElementById('qrUrl').textContent = qrUrl;
+    
+    const qrImg = document.getElementById('qrModalImg');
+    if (qrImg) {
+        qrImg.src = `data:image/png;base64,${base64Data}`;
+    }
+    
+    new bootstrap.Modal(document.getElementById('qrModal')).show();
+}
+
+function downloadQR() {
+    const img = document.getElementById('qrModalImg');
+    const a = document.createElement('a');
+    const title = document.getElementById('qrTitle').textContent.replace('QR Mesa ', '');
+    a.download = `qr-mesa-${title}.png`;
+    a.href = img.src;
+    a.click();
+}
 </script>
 {% endblock %}
