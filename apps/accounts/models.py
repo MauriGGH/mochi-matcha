@@ -25,7 +25,6 @@ class EmpleadoManager(BaseUserManager):
 class Empleado(AbstractBaseUser, PermissionsMixin):
     ROLES = [
         ('mesero', 'Mesero'),
-        ('cajero', 'Cajero'),
         ('cocina', 'Cocina'),
         ('gerente', 'Gerente'),
         ('admin', 'Administrador'),
