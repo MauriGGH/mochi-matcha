@@ -62,7 +62,7 @@
              data-desc="{{ prod.descripcion|default:''|escapejs }}"
              data-img="{{ prod.imagen_url|default:''|escapejs }}"
              data-precio="{{ prod.precio }}"
-             data-grupos="{{ prod.grupos_json|escapejs }}"
+             data-grupos="{{ prod.grupos_json }}"
              onclick="openProductModal(this)">
           {% if prod.imagen_url %}
           <img src="{{ prod.imagen_url }}" alt="{{ prod.nombre }}" class="product-img" loading="lazy"
