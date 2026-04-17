@@ -67,9 +67,16 @@ class Producto(models.Model):
 
     @property
     def grupos_json(self):
-        """Serializa los grupos de modificadores como JSON para usar en templates."""
+        # Si ya se precargaron los grupos, accedemos a ellos sin .all()
+        if hasattr(self, '_prefetched_objects_cache') and 'grupos_modificadores' in self._prefetched_objects_cache:
+            grupos_qs = self._prefetched_objects_cache['grupos_modificadores']
+        else:
+            grupos_qs = self.grupos_modificadores.all()
+        
         grupos = []
-        for g in self.grupos_modificadores.prefetch_related("opciones").all():
+        for g in grupos_qs:
+            # Las opciones también deberían venir precargadas; si no, forzamos consulta
+            opciones_qs = g.opciones.all() if not hasattr(g, '_prefetched_objects_cache') else g._prefetched_objects_cache.get('opciones', g.opciones.all())
             grupos.append({
                 "id": g.pk,
                 "nombre_grupo": g.nombre_grupo,
@@ -82,7 +89,7 @@ class Producto(models.Model):
                         "nombre_opcion": op.nombre_opcion,
                         "precio_extra": float(op.precio_extra),
                     }
-                    for op in g.opciones.all()
+                    for op in opciones_qs
                 ],
             })
         return json.dumps(grupos, ensure_ascii=False)
