@@ -20,6 +20,7 @@
 {% endblock %}
 
 {% block content %}
+{# BUG #23 FIX: eliminado el bloque "Próximamente..." que tapaba todo el contenido real #}
 
 {% if vista == 'auditoria' %}
 <!-- ═══ AUDITORÍA ════════════════════════════════════════════════════════════ -->
@@ -149,7 +150,7 @@
               <span style="color:var(--mm-text-muted); margin-left:.5rem;">Mesa {{ pedido.sesion.mesa.numero_mesa }}</span>
             </div>
             <div class="d-flex gap-2 align-items-center">
-              <span style="color:var(--mm-green); font-weight:600;">${{ pedido.detalles.all|length }}+ items</span>
+              <span style="color:var(--mm-green); font-weight:600;">{{ pedido.detalles.all|length }} items</span>
               <span style="font-size:.7rem; color:var(--mm-text-muted);">{{ pedido.fecha_hora_ingreso|date:"H:i" }}</span>
             </div>
           </div>
