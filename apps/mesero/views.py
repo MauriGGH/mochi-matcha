@@ -1,18 +1,17 @@
-"""
-mesero/views.py — Con pedido asistido POST completo.
-"""
+
 import json
 import uuid
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
+from django.db import transaction
 
 from apps.accounts.decorators import mesero_requerido
 from apps.mesas.models import Mesa, SesionCliente
 from apps.pedidos.models import Pedido, DetallePedido, DetalleModificador, SolicitudPago
 from apps.catalogs.models import MetodoPago, EstadoSolicitud, ModalidadIngreso
-from apps.menu.models import Producto  # asegúrate de importar al inicio
+from apps.menu.models import Producto
 
 
 # ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -65,25 +64,38 @@ def mapa_mesas(request):
 @require_GET
 @mesero_requerido
 def mesas_estado(request):
-    mesas = Mesa.objects.prefetch_related("sesiones__pedidos").order_by("numero_mesa")
+    # BUG #5 FIX: prefetch completo para evitar N+1 queries en el polling.
+    # Las consultas anidadas s.pedidos.filter(...).count() y
+    # s.solicitudes_pago.filter(...).exists() generaban ~100 queries por poll.
+    # Ahora se usan los objetos ya precargados en memoria.
+    mesas = Mesa.objects.prefetch_related(
+        "sesiones__pedidos",
+        "sesiones__solicitudes_pago__estado_solicitud",
+    ).order_by("numero_mesa")
+
     listos_count = Pedido.objects.filter(estado="listo").count()
     solicitudes_count = SolicitudPago.objects.filter(
         estado_solicitud__descripcion="pendiente"
     ).count()
+
     data = []
     for m in mesas:
-        sesiones_activas = m.sesiones.filter(estado="activa")
+        sesiones_activas = [s for s in m.sesiones.all() if s.estado == "activa"]
         pedidos_en_cocina = 0
         pedidos_listos = 0
         tiene_solicitud = False
 
         for s in sesiones_activas:
-            pedidos_en_cocina += s.pedidos.filter(estado__in=["recibido", "preparando"]).count()
-            pedidos_listos += s.pedidos.filter(estado="listo").count()
-            if s.solicitudes_pago.filter(estado_solicitud__descripcion="pendiente").exists():
-                tiene_solicitud = True
+            for p in s.pedidos.all():
+                if p.estado in ("recibido", "preparando"):
+                    pedidos_en_cocina += 1
+                elif p.estado == "listo":
+                    pedidos_listos += 1
+            for sol in s.solicitudes_pago.all():
+                if sol.estado_solicitud.descripcion == "pendiente":
+                    tiene_solicitud = True
+                    break
 
-        # Estado visual de la mesa
         if m.estado == "libre":
             estado_visual = "libre"
         elif tiene_solicitud:
@@ -103,7 +115,7 @@ def mesas_estado(request):
             "ubicacion": m.ubicacion or "",
             "capacidad": m.capacidad,
             "pin": m.pin_actual or "",
-            "clientes": sesiones_activas.count(),
+            "clientes": len(sesiones_activas),
             "pedidos_cocina": pedidos_en_cocina,
             "pedidos_listos": pedidos_listos,
             "tiene_solicitud": tiene_solicitud,
@@ -124,7 +136,9 @@ def detalle_mesa(request, mesa_id):
 
     sesiones_data = []
     for s in sesiones:
-        pedidos_sesion = s.pedidos.prefetch_related(
+        # BUG #16 FIX: excluir pedidos cancelados del cálculo del total de sesión.
+        # Antes se incluían cancelados, lo que inflaba el total mostrado al mesero.
+        pedidos_sesion = s.pedidos.exclude(estado="cancelado").prefetch_related(
             "detalles__producto", "detalles__modificadores__opcion"
         ).order_by("-fecha_hora_ingreso")
         total_sesion = sum(
@@ -155,7 +169,6 @@ def detalle_mesa(request, mesa_id):
             ],
         })
 
-    # Solicitudes pendientes
     solicitudes = []
     for s in sesiones:
         for sol in s.solicitudes_pago.filter(estado_solicitud__descripcion="pendiente").order_by("-fecha_hora"):
@@ -168,7 +181,6 @@ def detalle_mesa(request, mesa_id):
                 "fecha": sol.fecha_hora.strftime("%H:%M"),
             })
 
-    # Total general de la mesa
     total_mesa = sum(s["total"] for s in sesiones_data)
 
     return JsonResponse({
@@ -239,10 +251,20 @@ def cerrar_mesa(request):
     except Exception:
         return JsonResponse({"ok": False}, status=400)
     mesa = get_object_or_404(Mesa, pk=data.get("mesa_id"))
-    mesa.sesiones.filter(estado="activa").update(estado="cerrada")
-    mesa.estado = "libre"
-    mesa.pin_actual = None
-    mesa.save(update_fields=["estado", "pin_actual"])
+
+    # BUG #10 FIX: registrar cierre de mesa en auditoría antes de ejecutar cambios.
+    from apps.auditoria.models import Auditoria
+    with transaction.atomic():
+        mesa.sesiones.filter(estado="activa").update(estado="cerrada")
+        mesa.estado = "libre"
+        mesa.pin_actual = None
+        mesa.save(update_fields=["estado", "pin_actual"])
+        Auditoria.objects.create(
+            accion="Mesa cerrada",
+            detalle=f"Mesa {mesa.numero_mesa} cerrada manualmente por mesero.",
+            empleado=request.user,
+            mesa=mesa,
+        )
     return JsonResponse({"ok": True})
 
 
@@ -271,6 +293,10 @@ def confirmar_pedido_asistido(request):
     """
     POST — crea un pedido asistido a nombre de una sesión específica.
     Body JSON: { sesion_id, items: [{producto_id, cantidad, modificadores, notas}] }
+
+    BUG #2 FIX: toda la creación de Pedido + DetallePedido + DetalleModificador
+    se ejecuta dentro de transaction.atomic(). Sin esto, si un detalle fallaba
+    el pedido quedaba creado pero vacío en la base de datos.
     """
     try:
         data = json.loads(request.body)
@@ -286,39 +312,41 @@ def confirmar_pedido_asistido(request):
     sesion = get_object_or_404(SesionCliente, pk=sesion_id, estado="activa")
     modalidad_asistido, _ = ModalidadIngreso.objects.get_or_create(descripcion="asistido")
 
-    from apps.menu.models import Producto, OpcionModificador
-    pedido = Pedido.objects.create(
-        sesion=sesion,
-        modalidad=modalidad_asistido,
-        empleado_entrega=request.user,
-    )
+    from apps.menu.models import OpcionModificador
 
-    for item in items:
-        producto = get_object_or_404(Producto, pk=item.get("producto_id"), disponible=True)
-        cantidad = int(item.get("cantidad", 1))
-        modificadores_ids = item.get("modificadores", [])
-        notas = item.get("notas", "")
-
-        precio_extra = 0
-        if modificadores_ids:
-            for op in OpcionModificador.objects.filter(pk__in=modificadores_ids):
-                precio_extra += float(op.precio_extra)
-
-        subtotal = (float(producto.precio) + precio_extra) * cantidad
-        detalle = DetallePedido.objects.create(
-            pedido=pedido, producto=producto, cantidad=cantidad,
-            notas=notas, subtotal_calculado=subtotal,
+    with transaction.atomic():
+        pedido = Pedido.objects.create(
+            sesion=sesion,
+            modalidad=modalidad_asistido,
+            empleado_entrega=request.user,
         )
 
-        for op_id in modificadores_ids:
-            try:
-                opcion = OpcionModificador.objects.get(pk=op_id)
-                DetalleModificador.objects.create(
-                    detalle=detalle, opcion=opcion,
-                    precio_extra_aplicado=float(opcion.precio_extra),
-                )
-            except OpcionModificador.DoesNotExist:
-                pass
+        for item in items:
+            producto = get_object_or_404(Producto, pk=item.get("producto_id"), disponible=True)
+            cantidad = int(item.get("cantidad", 1))
+            modificadores_ids = item.get("modificadores", [])
+            notas = item.get("notas", "")
+
+            precio_extra = 0
+            if modificadores_ids:
+                for op in OpcionModificador.objects.filter(pk__in=modificadores_ids):
+                    precio_extra += float(op.precio_extra)
+
+            subtotal = (float(producto.precio) + precio_extra) * cantidad
+            detalle = DetallePedido.objects.create(
+                pedido=pedido, producto=producto, cantidad=cantidad,
+                notas=notas, subtotal_calculado=subtotal,
+            )
+
+            for op_id in modificadores_ids:
+                try:
+                    opcion = OpcionModificador.objects.get(pk=op_id)
+                    DetalleModificador.objects.create(
+                        detalle=detalle, opcion=opcion,
+                        precio_extra_aplicado=float(opcion.precio_extra),
+                    )
+                except OpcionModificador.DoesNotExist:
+                    pass
 
     return JsonResponse({"ok": True, "pedido_id": pedido.pk})
 
@@ -374,26 +402,37 @@ def procesar_pago(request):
     if not sesiones.exists():
         return redirect("mesero:mapa_mesas")
 
-    metodo = get_object_or_404(MetodoPago, pk=metodo_id) if metodo_id else None
+    # BUG #3 FIX: si metodo_id está vacío (catálogo vacío o campo no enviado),
+    # el código original asignaba metodo=None y Django lanzaba ValueError al hacer
+    # update(metodo_pago=None) en un FK sin null=True. Ahora se valida explícitamente.
+    if not metodo_id:
+        from django.contrib import messages
+        messages.error(request, "Debe seleccionar un método de pago.")
+        return redirect(f"/mesero/pago/?mesa={mesa_id}")
+
+    metodo = get_object_or_404(MetodoPago, pk=metodo_id)
     estado_procesada, _ = EstadoSolicitud.objects.get_or_create(descripcion="procesada")
 
-    for s in sesiones:
-        SolicitudPago.objects.filter(
-            sesion=s, estado_solicitud__descripcion="pendiente"
-        ).update(estado_solicitud=estado_procesada, metodo_pago=metodo)
-        s.estado = "pagada"
-        s.save(update_fields=["estado"])
+    with transaction.atomic():
+        for s in sesiones:
+            SolicitudPago.objects.filter(
+                sesion=s, estado_solicitud__descripcion="pendiente"
+            ).update(estado_solicitud=estado_procesada, metodo_pago=metodo)
+            s.estado = "pagada"
+            s.save(update_fields=["estado"])
 
-    mesa.estado = "libre"
-    mesa.pin_actual = None
-    mesa.save(update_fields=["estado", "pin_actual"])
+        mesa.estado = "libre"
+        mesa.pin_actual = None
+        mesa.save(update_fields=["estado", "pin_actual"])
+
     return redirect("mesero:mapa_mesas")
+
 
 @require_GET
 @mesero_requerido
 def productos_json(request):
     """Devuelve lista de productos disponibles para pedido asistido."""
-    productos = Producto.objects.filter(disponible=True).only('id', 'nombre', 'precio')
+    productos = Producto.objects.filter(disponible=True).only("id", "nombre", "precio")
     data = [{"id": p.id, "nombre": p.nombre, "precio": float(p.precio)} for p in productos]
     return JsonResponse({"ok": True, "productos": data})
 
@@ -407,7 +446,6 @@ def cancelar_pedido(request):
     except json.JSONDecodeError:
         return JsonResponse({"ok": False, "error": "JSON inválido"}, status=400)
     from apps.auditoria.models import Auditoria
-    from django.db import transaction
     pedido_id = data.get("pedido_id")
     motivo = data.get("motivo", "").strip()
     if not motivo:
