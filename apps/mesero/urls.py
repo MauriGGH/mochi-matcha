@@ -11,6 +11,7 @@ urlpatterns = [
     path('mapa/<int:mesa_id>/', views.detalle_mesa, name='detalle_mesa'),
     path('pedidos-listos/', views.pedidos_listos, name='pedidos_listos'),
     path('pedidos/entregar/', views.entregar_pedido, name='entregar_pedido'),
+    path('pedidos/cancelar/', views.cancelar_pedido, name='cancelar_pedido'),
     path('sesion/cerrar/', views.cerrar_sesion, name='cerrar_sesion'),
     path('mesa/cerrar/', views.cerrar_mesa, name='cerrar_mesa'),
     path('asistido/', views.pedido_asistido, name='pedido_asistido'),
