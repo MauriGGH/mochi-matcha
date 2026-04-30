@@ -1,34 +1,31 @@
-"""
-mochi_matcha — URL Configuration
-"""
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
-from django.views.generic import RedirectView
+from django.views.generic import RedirectView, TemplateView
+from django.shortcuts import render
+
+
+def mantenimiento_view(request):
+    from apps.gerente.models import Configuracion
+    try:
+        msg = Configuracion.objects.filter(clave='mensaje_mantenimiento').first()
+        mensaje = msg.valor if msg else ''
+    except Exception:
+        mensaje = ''
+    return render(request, 'mantenimiento.html', {'mensaje': mensaje})
+
 
 urlpatterns = [
-    # Raíz → bienvenida
     path("", RedirectView.as_view(url="/bienvenida/"), name="root"),
-
-    # Django admin — solo superusuarios en mantenimiento
+    path("mantenimiento/", mantenimiento_view, name="mantenimiento"),
     path("admin/", admin.site.urls),
-
-    # ── Cuentas (logout compartido del staff) ──────────────────────────
-    path("accounts/", include("accounts.urls")),
-
-    # ── Módulo cliente (sin autenticación Django; usa cookie propia) ──
-    # Acceso: /  →  /bienvenida/?mesa=5
-    #          /menu/, /carrito/, /pedidos/, etc.
-    path("", include("cliente.urls")),
-
-    # ── Módulo mesero ──────────────────────────────────────────────────
-    # Acceso: /mesero/login/  →  /mesero/mesas/
-    path("mesero/", include("mesero.urls")),
-
-    # ── Módulo cocina (KDS) ────────────────────────────────────────────
-    # Acceso: /cocina/login/  →  /cocina/kds/?area=cocina
-    path("cocina/", include("cocina.urls")),
-
-    # ── Módulo gerente / admin ────────────────────────────────────────
-    # Acceso: /gerente/login/  →  /gerente/dashboard/
-    path("gerente/", include("gerente.urls")),
+    path("accounts/", include("apps.accounts.urls")),
+    path("", include("apps.cliente.urls")),
+    path("mesero/", include("apps.mesero.urls")),
+    path("cocina/", include("apps.cocina.urls")),
+    path("gerente/", include("apps.gerente.urls")),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

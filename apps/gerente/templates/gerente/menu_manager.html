@@ -1,0 +1,749 @@
+{% extends "base/staff_base.html" %}
+{% load static %}
+{% block title %}Gestión de Menú{% endblock %}
+{% block page_title %}Gestión de Menú{% endblock %}
+{% block sidebar_nav %}
+<a href="{% url 'gerente:floor_plan' %}"><i class="bi bi-grid-fill"></i> Floor Plan</a>
+<div class="nav-section-label">Gestión</div>
+<a href="{% url 'gerente:productos' %}" class="active"><i class="bi bi-basket-fill"></i> Gestión de Menú</a>
+<div class="nav-section-label">Reportes</div>
+<a href="{% url 'gerente:reportes' %}"><i class="bi bi-bar-chart-fill"></i> Reportes</a>
+<div class="nav-section-label">Admin</div>
+<a href="{% url 'gerente:empleados' %}"><i class="bi bi-people-fill"></i> Empleados</a>
+<a href="{% url 'gerente:configuracion' %}"><i class="bi bi-gear-fill"></i> Configuración</a>
+{% endblock %}
+{% block extra_head %}
+<style>
+.mm-tab{padding:.6rem 1.25rem;font-size:.875rem;font-weight:600;text-decoration:none;border-bottom:2px solid transparent;color:var(--mm-text-muted);margin-bottom:-2px;display:inline-block;}
+.mm-tab:hover{color:var(--mm-green);}
+.mm-tab.active{border-bottom-color:var(--mm-green);color:var(--mm-green);}
+.sc{background:var(--mm-white);border:1px solid var(--mm-border);border-radius:var(--radius-md);padding:1.25rem;margin-bottom:1rem;}
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h5 class="fw-bold mb-0">Gestión de Menú</h5>
+</div>
+<div style="display:flex;border-bottom:2px solid var(--mm-border);margin-bottom:1.5rem;overflow-x:auto;">
+  <a href="{% url 'gerente:productos' %}" class="mm-tab {% if vista == 'productos' %}active{% endif %}">Productos</a>
+  <a href="{% url 'gerente:categorias' %}" class="mm-tab {% if vista == 'categorias' %}active{% endif %}">Categorías</a>
+  <a href="{% url 'gerente:modificadores' %}" class="mm-tab {% if vista == 'modificadores' %}active{% endif %}">Modificadores</a>
+  <a href="{% url 'gerente:promociones' %}" class="mm-tab {% if vista == 'promociones' %}active{% endif %}">Promociones</a>
+  <a href="{% url 'gerente:mesas_crud' %}" class="mm-tab {% if vista == 'mesas' %}active{% endif %}">Mesas</a>
+</div>
+
+{% if vista == 'productos' %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div class="d-flex gap-2 flex-wrap">
+    <input type="text" id="searchProd" class="form-control form-control-sm" placeholder="Buscar producto…" style="width:200px;border-color:var(--mm-border);" oninput="filterProducts()">
+    <select id="filterCat" class="form-select form-select-sm" style="width:170px;border-color:var(--mm-border);" onchange="filterProducts()">
+      <option value="">Todas las categorías</option>
+      {% for cat in categorias %}<option value="{{ cat.id }}">{{ cat.nombre }}</option>{% endfor %}
+    </select>
+  </div>
+  <button class="btn btn-primary btn-sm rounded-pill px-3" onclick="openNewProduct()"><i class="bi bi-plus-lg me-1"></i>Nuevo producto</button>
+</div>
+<div class="table-responsive">
+  <table class="table data-table">
+    <thead><tr><th style="width:52px;">IMG</th><th>PRODUCTO</th><th>CATEGORÍA</th><th>PRECIO</th><th>ESTADO</th><th>ACCIONES</th></tr></thead>
+    <tbody id="productsTable">
+      {% for prod in productos %}
+      <tr data-name="{{ prod.nombre|lower }}" data-cat="{{ prod.categoria.id }}">
+        <td>
+          {% if prod.imagen_url %}<img src="{{ prod.imagen_url }}" style="width:40px;height:40px;object-fit:cover;border-radius:8px;" onerror="this.style.display='none'" alt="">
+          {% else %}<div style="width:40px;height:40px;background:var(--mm-cream-dark);border-radius:8px;display:flex;align-items:center;justify-content:center;">🍵</div>{% endif %}
+        </td>
+        <td><div style="font-weight:600;font-size:.875rem;">{{ prod.nombre }}</div>{% if prod.descripcion %}<div style="font-size:.75rem;color:var(--mm-text-muted);">{{ prod.descripcion|truncatechars:50 }}</div>{% endif %}</td>
+        <td><span style="background:var(--mm-cream-dark);padding:.2rem .6rem;border-radius:99px;font-size:.78rem;">{{ prod.categoria.nombre }}</span></td>
+        <td style="font-weight:700;">${{ prod.precio }}</td>
+        <td>
+          {% if prod.disponible %}<span style="background:#EAFAF1;color:#1E8449;border-radius:99px;padding:.2rem .7rem;font-size:.75rem;font-weight:700;"><i class="bi bi-check-circle-fill me-1"></i>Activo</span>
+          {% else %}<span style="background:#F2F3F4;color:#566573;border-radius:99px;padding:.2rem .7rem;font-size:.75rem;font-weight:700;"><i class="bi bi-x-circle me-1"></i>Agotado</span>{% endif %}
+        </td>
+        <td>
+          <button class="btn btn-link btn-sm p-1" title="Editar" onclick="openEditProduct({{ prod.id }},'{{ prod.nombre|escapejs }}','{{ prod.descripcion|default:''|escapejs }}','{{ prod.precio }}','{{ prod.categoria.id }}',{{ prod.disponible|yesno:'true,false' }},'{{ prod.imagen_url|default:''|escapejs }}')"><i class="bi bi-pencil" style="color:var(--mm-text-muted);"></i></button>
+          <button class="btn btn-link btn-sm p-1" onclick="toggleProduct({{ prod.id }}, {{ prod.disponible|yesno:'true,false' }})" title="{% if prod.disponible %}Desactivar (el historial se conserva){% else %}Activar{% endif %}"><i class="bi bi-{% if prod.disponible %}eye-slash{% else %}eye{% endif %}" style="color:{% if prod.disponible %}var(--mm-danger){% else %}var(--mm-green){% endif %};"></i></button>
+        </td>
+      </tr>
+      {% empty %}<tr><td colspan="6" class="text-center py-5" style="color:var(--mm-text-muted);"><div style="font-size:2rem;">🛒</div>No hay productos aún.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if vista == 'categorias' %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <p style="font-size:.875rem;color:var(--mm-text-muted);margin:0;">Define las secciones del menú y el área del KDS (Cocina o Bar).</p>
+  <button class="btn btn-primary btn-sm rounded-pill px-3" onclick="document.getElementById('newCatForm').style.display='block'"><i class="bi bi-plus-lg me-1"></i>Nueva categoría</button>
+</div>
+<div id="newCatForm" style="display:none;" class="sc" style="border-color:var(--mm-green);background:var(--mm-green-pale);">
+  <h6 class="fw-bold mb-3">Nueva categoría</h6>
+  <form method="post" action="{% url 'gerente:categorias' %}">{% csrf_token %}
+    <div class="row g-3 align-items-end">
+      <div class="col-md-4"><label class="form-label fw-semibold" style="font-size:.85rem;">Nombre *</label><input type="text" name="nombre" required class="form-control" style="border-color:var(--mm-border);" placeholder="ej. Matcha &amp; Té"></div>
+      <div class="col-md-3"><label class="form-label fw-semibold" style="font-size:.85rem;">Área KDS</label><select name="area" class="form-select" style="border-color:var(--mm-border);"><option value="ambos">Ambos</option><option value="cocina">Solo Cocina</option><option value="bar">Solo Bar</option></select></div>
+      <div class="col-md-2"><label class="form-label fw-semibold" style="font-size:.85rem;">Orden</label><input type="number" name="orden" value="0" class="form-control" style="border-color:var(--mm-border);"></div>
+      <div class="col-md-3 d-flex gap-2"><button type="submit" class="btn btn-primary flex-grow-1">Guardar</button><button type="button" class="btn" style="background:var(--mm-cream-dark);" onclick="document.getElementById('newCatForm').style.display='none'">×</button></div>
+    </div>
+  </form>
+</div>
+<div class="row g-3 mt-1">
+  {% for cat in categorias %}
+  <div class="col-md-6 col-lg-4">
+    <div class="sc" style="padding:1rem;">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div style="font-weight:700;font-size:.95rem;">{{ cat.nombre }}</div>
+          <div style="font-size:.75rem;color:var(--mm-text-muted);margin-top:.2rem;">Orden: {{ cat.orden }} · <span style="background:var(--mm-cream-dark);padding:.1rem .4rem;border-radius:99px;">{{ cat.area }}</span></div>
+          <div style="font-size:.75rem;color:var(--mm-text-muted);margin-top:.2rem;">{{ cat.productos.count }} productos</div>
+        </div>
+        <button class="btn btn-link btn-sm p-0" style="color:var(--mm-danger);" onclick="deleteCategoria({{ cat.id }},'{{ cat.nombre|escapejs }}')"><i class="bi bi-trash3"></i></button>
+      </div>
+    </div>
+  </div>
+  {% empty %}<div class="col-12 text-center py-5" style="color:var(--mm-text-muted);"><div style="font-size:2rem;">🏷️</div><p>No hay categorías aún.</p></div>{% endfor %}
+</div>
+{% endif %}
+
+{% if vista == 'modificadores' %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <p style="font-size:.875rem;color:var(--mm-text-muted);margin:0;">Grupos de opciones asociados a productos (leche, tamaño, extras…).</p>
+  <button class="btn btn-primary btn-sm rounded-pill px-3" onclick="openNewModificador()"><i class="bi bi-plus-lg me-1"></i>Nuevo grupo</button>
+</div>
+<div class="mb-3">
+  <input type="text" id="searchMod" class="form-control form-control-sm"
+    placeholder="Buscar por nombre del grupo o producto asociado…"
+    style="border-color:var(--mm-border);"
+    oninput="filterModificadores()">
+</div>
+{% for grupo in grupos %}
+<div class="sc mod-card"
+     data-mod-nombre="{{ grupo.nombre_grupo|lower }}"
+     data-mod-productos="{% for p in grupo.productos.all %}{{ p.nombre|lower }} {% endfor %}">
+  <div class="d-flex justify-content-between align-items-start mb-2">
+    <div>
+      <div style="font-weight:700;font-size:.95rem;">{{ grupo.nombre_grupo }}</div>
+      <div style="font-size:.78rem;color:var(--mm-text-muted);margin-top:.2rem;">Productos: <strong>{% for p in grupo.productos.all %}{{ p.nombre }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</strong> · Tipo: {{ grupo.tipo }} · {% if grupo.es_obligatorio %}<span style="color:var(--mm-danger);font-weight:600;">Obligatorio</span>{% else %}Opcional{% endif %}{% if grupo.max_selecciones %} · Máx. {{ grupo.max_selecciones }}{% endif %}</div>
+    </div>
+    <div class="d-flex gap-1">
+      <button class="btn btn-link btn-sm p-0" style="color:var(--mm-info);" onclick="editarGrupo({{ grupo.id }})" title="Editar grupo"><i class="bi bi-pencil"></i></button>
+      <button class="btn btn-link btn-sm p-0" style="color:{% if grupo.es_plantilla %}var(--mm-gold){% else %}var(--mm-text-muted){% endif %};" onclick="togglePlantilla({{ grupo.id }}, this)" title="{% if grupo.es_plantilla %}Quitar plantilla{% else %}Marcar como plantilla{% endif %}"><i class="bi bi-bookmark{% if grupo.es_plantilla %}-fill{% endif %}"></i></button>
+      <button class="btn btn-link btn-sm p-0" style="color:var(--mm-danger);" onclick="deleteGrupo({{ grupo.id }})"><i class="bi bi-trash3"></i></button>
+    </div>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    {% for op in grupo.opciones.all %}
+    <span style="background:var(--mm-cream-dark);border-radius:99px;padding:.25rem .8rem;font-size:.8rem;">{{ op.nombre_opcion }}{% if op.precio_extra > 0 %} <span style="color:var(--mm-gold);font-weight:600;">+${{ op.precio_extra }}</span>{% else %} <span style="color:var(--mm-success);">Gratis</span>{% endif %}</span>
+    {% endfor %}
+  </div>
+</div>
+{% empty %}<div class="text-center py-5" style="color:var(--mm-text-muted);"><div style="font-size:2.5rem;">⚙️</div><p>No hay grupos de modificadores.</p></div>{% endfor %}
+{% endif %}
+
+{% if vista == 'promociones' %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <p style="font-size:.875rem;color:var(--mm-text-muted);margin:0;">Descuentos y ofertas especiales del menú.</p>
+  <button class="btn btn-primary btn-sm rounded-pill px-3" onclick="openNewPromo()"><i class="bi bi-plus-lg me-1"></i>Nueva promoción</button>
+</div>
+{% for promo in promociones %}
+<div class="sc" style="opacity:{% if promo.activa %}1{% else %}.6{% endif %};">
+  <div class="d-flex align-items-start gap-3">
+    <div style="width:44px;height:44px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;background:{% if promo.activa %}var(--mm-green-pale){% else %}var(--mm-cream-dark){% endif %};">%</div>
+    <div class="flex-grow-1">
+      <div style="font-weight:700;font-size:.95rem;">{{ promo.titulo }}</div>
+      <div style="font-size:.78rem;color:var(--mm-text-muted);margin-top:.2rem;">
+        {% if promo.tipo_descuento %}
+          {{ promo.tipo_descuento.descripcion }}
+          {% if promo.tipo_descuento.descripcion == "Porcentaje" %}
+            ({{ promo.valor_descuento }}%)
+          {% elif promo.tipo_descuento.descripcion == "Monto fijo" %}
+            (${{ promo.valor_descuento }})
+          {% elif promo.tipo_descuento.descripcion == "Lleva X paga Y" %}
+            (Lleva {{ promo.cantidad_minima }} paga {{ promo.valor_descuento }})
+          {% elif promo.tipo_descuento.descripcion == "Combo precio fijo" %}
+            (Precio combo: ${{ promo.valor_descuento }})
+          {% elif promo.tipo_descuento.descripcion == "2x1" %}
+            (2x1)
+          {% endif %}
+        {% elif promo.tipo_promocion %}
+          {{ promo.tipo_promocion.descripcion }}
+        {% else %}
+          —
+        {% endif %}
+        · {{ promo.fecha_inicio|date:"d/m/Y" }} – {{ promo.fecha_fin|date:"d/m/Y" }}
+      </div>
+      <div class="d-flex gap-1 flex-wrap mt-1">{% for pp in promo.productos.all|slice:":4" %}<span style="background:var(--mm-cream-dark);border-radius:99px;padding:.15rem .5rem;font-size:.72rem;">{{ pp.nombre }}</span>{% endfor %}</div>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+      <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" {% if promo.activa %}checked{% endif %} onchange="togglePromo({{ promo.id }},this)" style="cursor:pointer;width:2.25em;height:1.1em;accent-color:var(--mm-green);"></div>
+      <button class="btn btn-link btn-sm p-0" onclick="editarPromo({{ promo.id }})" title="Editar promoción">
+        <i class="bi bi-pencil" style="color:var(--mm-text-muted);"></i>
+      </button>
+      <button class="btn btn-link btn-sm p-0" onclick="deletePromo({{ promo.id }})"><i class="bi bi-trash3" style="color:var(--mm-danger);"></i></button>
+    </div>
+  </div>
+</div>
+{% empty %}<div class="text-center py-5" style="color:var(--mm-text-muted);"><div style="font-size:2.5rem;">🏷️</div><p>No hay promociones.</p></div>{% endfor %}
+{% endif %}
+
+{% if vista == 'mesas' %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <p style="font-size:.875rem;color:var(--mm-text-muted);margin:0;">Configura las mesas. El código QR se genera automáticamente.</p>
+  <button class="btn btn-primary btn-sm rounded-pill px-3" onclick="document.getElementById('newMesaForm').style.display='block'"><i class="bi bi-plus-lg me-1"></i>Nueva mesa</button>
+</div>
+<div id="newMesaForm" style="display:none;" class="sc">
+  <h6 class="fw-bold mb-3">Nueva mesa</h6>
+  <form method="post" action="{% url 'gerente:mesas_crud' %}">{% csrf_token %}
+    <div class="row g-3 align-items-end">
+      <div class="col-md-3"><label class="form-label fw-semibold" style="font-size:.85rem;">Número *</label><input type="number" name="numero_mesa" required min="1" class="form-control" style="border-color:var(--mm-border);"></div>
+      <div class="col-md-2"><label class="form-label fw-semibold" style="font-size:.85rem;">Capacidad</label><input type="number" name="capacidad" value="4" min="1" class="form-control" style="border-color:var(--mm-border);"></div>
+      <div class="col-md-3"><label class="form-label fw-semibold" style="font-size:.85rem;">Ubicación</label>
+        <div class="d-flex gap-1">
+          <select name="ubicacion_id" id="ubicacionSelect" class="form-select" style="border-color:var(--mm-border);">
+            <option value="">Sin ubicación</option>
+            {% for ub in ubicaciones %}<option value="{{ ub.id }}">{{ ub.nombre }}</option>{% endfor %}
+          </select>
+          <button type="button" class="btn btn-sm px-2" style="background:var(--mm-cream-dark); white-space:nowrap;" onclick="abrirNuevaUbicacion()" title="Nueva ubicación">＋</button>
+        </div>
+      </div>
+      <div class="col-md-4 d-flex gap-2"><button type="submit" class="btn btn-primary flex-grow-1">Crear mesa</button><button type="button" class="btn" style="background:var(--mm-cream-dark);" onclick="document.getElementById('newMesaForm').style.display='none'">×</button></div>
+    </div>
+  </form>
+</div>
+<div class="table-responsive">
+  <table class="table data-table">
+    <thead><tr><th>#</th><th>CAPACIDAD</th><th>UBICACIÓN</th><th>CÓDIGO QR</th><th>ESTADO</th><th>ACCIONES</th></tr></thead>
+    <tbody>
+      {% for mesa in mesas %}
+      <tr>
+        <td style="font-weight:700;">Mesa {{ mesa.numero_mesa }}</td>
+        <td><i class="bi bi-people me-1" style="color:var(--mm-text-muted);"></i>{{ mesa.capacidad }}</td>
+        <td style="color:var(--mm-text-muted);">{{ mesa.ubicacion.nombre|default:"—" }}</td>
+        <td>
+          <img src="data:image/png;base64,{{ mesa.generate_qr_base64 }}" width="50" height="50" style="border-radius:6px;" alt="QR Mesa {{ mesa.numero_mesa }}">
+        </td>
+        <td>{% if mesa.estado == 'libre' %}<span style="background:var(--mm-cream-dark);color:var(--mm-text-muted);border-radius:99px;padding:.2rem .7rem;font-size:.75rem;">Libre</span>{% else %}<span style="background:var(--mm-green-pale);color:var(--mm-green);border-radius:99px;padding:.2rem .7rem;font-size:.75rem;font-weight:600;">Ocupada</span>{% endif %}</td>
+        <td>
+          <button class="btn btn-link btn-sm p-1" onclick="showQR('{{ mesa.generate_qr_base64 }}', {{ mesa.id }})" title="Ver QR"><i class="bi bi-qr-code" style="color:var(--mm-green);font-size:1.1rem;"></i></button>
+          {% if mesa.estado == 'libre' %}<form method="post" action="{% url 'gerente:mesa_eliminar' mesa.id %}" style="display:inline;" onsubmit="return confirm('¿Eliminar Mesa {{ mesa.numero_mesa }}?')">{% csrf_token %}<button type="submit" class="btn btn-link btn-sm p-1"><i class="bi bi-trash3" style="color:var(--mm-danger);"></i></button></form>{% endif %}
+        </td>
+      </tr>
+      {% empty %}<tr><td colspan="6" class="text-center py-5" style="color:var(--mm-text-muted);"><div style="font-size:2rem;">🪑</div>No hay mesas configuradas.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# ── Gestión de Ubicaciones ─────────────────────────────────────────────────── #}
+<div class="mt-4 p-3" style="background:var(--mm-cream);border-radius:var(--radius-md);">
+  <h6 class="fw-bold mb-3" style="font-size:.9rem;">Ubicaciones configuradas</h6>
+  {% if ubicaciones %}
+  <div class="d-flex flex-wrap gap-2" id="ubicacionesList">
+    {% for ub in ubicaciones %}
+    <div class="d-flex align-items-center gap-1 px-3 py-1 rounded-pill" style="background:var(--mm-white);border:1px solid var(--mm-border);font-size:.85rem;" data-ub-id="{{ ub.id }}">
+      <span class="ub-nombre">{{ ub.nombre }}</span>
+      <button class="btn btn-link btn-sm p-0 ms-1" title="Editar" onclick="editarUbicacion({{ ub.id }}, '{{ ub.nombre }}')">
+        <i class="bi bi-pencil" style="font-size:.75rem;color:var(--mm-text-muted);"></i>
+      </button>
+      <button class="btn btn-link btn-sm p-0" title="Eliminar" onclick="eliminarUbicacion({{ ub.id }}, '{{ ub.nombre }}')">
+        <i class="bi bi-trash3" style="font-size:.75rem;color:var(--mm-danger);"></i>
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p style="font-size:.85rem;color:var(--mm-text-muted);">No hay ubicaciones. Crea una con el botón ＋ del formulario de mesa.</p>
+  {% endif %}
+</div>
+
+{% endif %}
+
+<!-- Modal Producto -->
+<div class="modal fade" id="productModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content rounded-4 border-0">
+      <div class="modal-header border-0 pb-0 px-4 pt-4"><h5 class="modal-title fw-bold" id="productModalTitle">Nuevo producto</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body px-4 pb-0">
+        <form id="productForm" method="post">{% csrf_token %}
+          <div class="row g-3">
+            <div class="col-md-8"><label class="form-label fw-semibold" style="font-size:.85rem;">Nombre *</label><input type="text" name="nombre" id="pNombre" required class="form-control" style="border-color:var(--mm-border);"></div>
+            <div class="col-md-4"><label class="form-label fw-semibold" style="font-size:.85rem;">Precio *</label><div class="input-group"><span class="input-group-text" style="background:var(--mm-cream);border-color:var(--mm-border);">$</span><input type="number" name="precio" id="pPrecio" required step="0.01" min="0" class="form-control" style="border-color:var(--mm-border);" placeholder="0.00"></div></div>
+            <div class="col-md-6"><label class="form-label fw-semibold" style="font-size:.85rem;">Categoría *</label><select name="categoria_id" id="pCategoria" required class="form-select" style="border-color:var(--mm-border);"><option value="">Selecciona…</option>{% for cat in categorias %}<option value="{{ cat.id }}">{{ cat.nombre }}</option>{% endfor %}</select></div>
+            <div class="col-md-6"><label class="form-label fw-semibold" style="font-size:.85rem;">URL de imagen</label><input type="url" name="imagen_url" id="pImagen" class="form-control" style="border-color:var(--mm-border);" placeholder="https://…"></div>
+            <div class="col-12"><label class="form-label fw-semibold" style="font-size:.85rem;">Descripción</label><textarea name="descripcion" id="pDesc" class="form-control" rows="2" style="border-color:var(--mm-border);resize:none;" placeholder="Breve descripción…"></textarea></div>
+            <div class="col-12 pb-1"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="disponible" id="pDisponible" checked style="accent-color:var(--mm-green);"><label class="form-check-label fw-semibold" for="pDisponible" style="font-size:.875rem;">Disponible en el menú</label></div></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer border-0 px-4 pb-4 pt-2"><button type="button" class="btn" style="background:var(--mm-cream-dark);" data-bs-dismiss="modal">Cancelar</button><button type="submit" form="productForm" class="btn btn-primary px-4">Guardar</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Modificador -->
+<div class="modal fade" id="modModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content rounded-4 border-0">
+      <div class="modal-header border-0 pb-0 px-4 pt-4"><h5 class="modal-title fw-bold">Nuevo grupo de modificadores</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body px-4">
+        {% if plantillas %}
+        <div class="mb-3 p-3 rounded-3" style="background:var(--mm-cream);border:1px dashed var(--mm-border);">
+          <label class="form-label fw-semibold mb-1" style="font-size:.85rem;"><i class="bi bi-bookmark-fill me-1" style="color:var(--mm-gold);"></i>Copiar desde plantilla</label>
+          <div class="d-flex gap-2">
+            <select id="mPlantilla" class="form-select form-select-sm" style="border-color:var(--mm-border);">
+              <option value="">Selecciona una plantilla…</option>
+              {% for pt in plantillas %}<option value="{{ pt.id }}" data-nombre="{{ pt.nombre_grupo }}" data-tipo="{{ pt.tipo }}" data-obligatorio="{{ pt.es_obligatorio|yesno:'true,false' }}" data-max="{{ pt.max_selecciones|default:'' }}" data-opciones="{{ pt.opciones.all|length }}">{{ pt.nombre_grupo }}</option>{% endfor %}
+            </select>
+            <button type="button" class="btn btn-sm px-3" style="background:var(--mm-cream-dark);white-space:nowrap;" onclick="aplicarPlantilla()">Aplicar</button>
+          </div>
+        </div>
+        {% endif %}
+        <div class="row g-3 mb-3">
+          <div class="col-md-6"><label class="form-label fw-semibold" style="font-size:.85rem;">Nombre del grupo *</label><input type="text" id="mNombre" class="form-control" placeholder="ej. Tipo de leche" style="border-color:var(--mm-border);"></div>
+          <div class="col-md-6"><label class="form-label fw-semibold" style="font-size:.85rem;">Productos * <span style="font-size:.7rem;font-weight:400;color:var(--mm-text-muted);">(Ctrl/⌘ para varios)</span></label><select id="mProducto" multiple class="form-select" style="border-color:var(--mm-border);min-height:90px;"><option value="" disabled>Selecciona productos…</option>{% for prod in productos_list %}<option value="{{ prod.id }}">{{ prod.nombre }}</option>{% endfor %}</select></div>
+          <div class="col-md-4"><label class="form-label fw-semibold" style="font-size:.85rem;">Tipo</label><select id="mTipo" class="form-select" style="border-color:var(--mm-border);"><option value="única">Selección única</option><option value="múltiple">Múltiple</option></select></div>
+          <div class="col-md-4"><label class="form-label fw-semibold" style="font-size:.85rem;">Máx. selecciones</label><input type="number" id="mMax" class="form-control" min="1" placeholder="Ilimitado" style="border-color:var(--mm-border);"></div>
+          <div class="col-md-4 d-flex align-items-end pb-1"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="mObligatorio" style="accent-color:var(--mm-green);"><label class="form-check-label fw-semibold" for="mObligatorio" style="font-size:.875rem;">Obligatorio</label></div></div>
+        </div>
+        <h6 class="fw-bold mb-2">Opciones</h6>
+        <div id="opcionesContainer" class="mb-2"></div>
+        <button type="button" class="btn btn-sm" style="background:var(--mm-cream-dark);" onclick="addOpcion()"><i class="bi bi-plus-lg me-1"></i>Agregar opción</button>
+      </div>
+      <div class="modal-footer border-0 px-4 pb-4 pt-0"><button type="button" class="btn" style="background:var(--mm-cream-dark);" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary px-4" onclick="saveModificador()">Guardar grupo</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Nueva Promoción -->
+<div class="modal fade" id="promoModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content rounded-4 border-0">
+      <div class="modal-header border-0 pb-0 px-4 pt-4"><h5 class="modal-title fw-bold">Nueva promoción</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body px-4">
+        <form id="promoForm" method="post">{% csrf_token %}
+          <input type="hidden" name="promo_id" id="promoId">
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label fw-semibold" style="font-size:.85rem;">Título *</label><input type="text" name="titulo" required class="form-control" style="border-color:var(--mm-border);" placeholder="ej. 2×1 en Frappés"></div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" style="font-size:.85rem;">Tipo de descuento *</label>
+              <select name="tipo_descuento_id" id="promoTipoDescuento" class="form-select" style="border-color:var(--mm-border);" onchange="onPromoTipoChange(this)">
+                {% for td in tipos_descuento %}<option value="{{ td.id }}" data-desc="{{ td.descripcion }}">{{ td.descripcion }}</option>{% endfor %}
+              </select>
+              <div id="promoTipoHint" style="font-size:.78rem;color:var(--mm-text-muted);margin-top:.35rem;padding:.4rem .6rem;background:var(--mm-cream);border-radius:6px;display:none;"></div>
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label fw-semibold" style="font-size:.85rem;">Aplicación</label>
+              <select name="aplicacion" id="promoAplicacion" class="form-select" style="border-color:var(--mm-border);">
+                <option value="item">Por ítem</option>
+                <option value="total">Total carrito</option>
+                <option value="combo">Combo</option>
+              </select>
+            </div>
+
+            <div class="col-md-4" id="fieldValorDescuento">
+              <label class="form-label fw-semibold" style="font-size:.85rem;" id="labelValorDescuento">Valor *</label>
+              <input type="number" name="valor_descuento" id="promoValor" step="0.01" min="0" class="form-control" style="border-color:var(--mm-border);" placeholder="ej. 15">
+            </div>
+
+            <div class="col-md-3" id="fieldCantidadMinima" style="display:none;">
+              <label class="form-label fw-semibold" style="font-size:.85rem;">Llevas (X)</label>
+              <input type="number" name="cantidad_minima" min="2" class="form-control" style="border-color:var(--mm-border);" placeholder="ej. 3">
+            </div>
+
+            <div class="col-md-4"><label class="form-label fw-semibold" style="font-size:.85rem;">Fecha inicio *</label><input type="datetime-local" name="fecha_inicio" required class="form-control" style="border-color:var(--mm-border);"></div>
+            <div class="col-md-4"><label class="form-label fw-semibold" style="font-size:.85rem;">Fecha fin *</label><input type="datetime-local" name="fecha_fin" required class="form-control" style="border-color:var(--mm-border);"></div>
+
+            <div class="col-12" id="fieldProductosAplicables">
+              <label class="form-label fw-semibold" style="font-size:.85rem;" id="labelProductosAplicables">Productos aplicables</label>
+              <select name="productos_aplicables" multiple class="form-select" style="border-color:var(--mm-border); min-height:90px;">
+                {% for prod in productos_list %}<option value="{{ prod.id }}">{{ prod.nombre }}</option>{% endfor %}
+              </select>
+              <div style="font-size:.72rem;color:var(--mm-text-muted);margin-top:.2rem;">Ctrl/⌘ para selección múltiple. Vacío = aplica a todos.</div>
+            </div>
+
+            <div class="col-12" id="fieldProductosBeneficiados" style="display:none;">
+              <label class="form-label fw-semibold" style="font-size:.85rem;">Productos beneficiados (combo)</label>
+              <select name="productos_beneficiados" multiple class="form-select" style="border-color:var(--mm-border); min-height:90px;">
+                {% for prod in productos_list %}<option value="{{ prod.id }}">{{ prod.nombre }}</option>{% endfor %}
+              </select>
+              <div style="font-size:.72rem;color:var(--mm-text-muted);margin-top:.2rem;">Productos que reciben el precio de combo.</div>
+            </div>
+
+            <div id="promo2x1Info" style="display:none;" class="col-12">
+              <div class="p-3 rounded-3" style="background:var(--mm-cream); font-size:.875rem;">
+                <strong>2x1:</strong> Por cada 2 unidades del producto seleccionado, la segunda es gratis. No requiere valor numérico.
+              </div>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold" style="font-size:.85rem;">URL de imagen (banner) <span class="text-muted fw-normal">opcional</span></label>
+              <input type="url" name="imagen_url" id="promoImagenUrl" class="form-control" style="border-color:var(--mm-border);" placeholder="https://ejemplo.com/imagen.jpg">
+              <div class="form-text">Se mostrará como banner en la app del cliente cuando la promoción esté activa.</div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer border-0 px-4 pb-4 pt-0"><button type="button" class="btn" style="background:var(--mm-cream-dark);" data-bs-dismiss="modal">Cancelar</button><button type="submit" form="promoForm" class="btn btn-primary px-4">Crear promoción</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal QR (versión con imagen base64, sin librería externa) -->
+<div class="modal fade" id="qrModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:300px;">
+    <div class="modal-content rounded-4 border-0 text-center">
+      <div class="modal-body p-4">
+        <h6 class="fw-bold mb-3" id="qrTitle">QR Mesa</h6>
+        <img id="qrModalImg" src="" alt="Código QR" style="border-radius:var(--radius-sm); border:2px solid var(--mm-border); width:220px; height:220px;">
+        <p style="font-size:.72rem; color:var(--mm-text-muted); margin-top:.75rem;" id="qrUrl"></p>
+        <button class="btn btn-primary w-100 mt-2" onclick="downloadQR()"><i class="bi bi-download me-1"></i>Descargar QR</button>
+        <button class="btn w-100 mt-2" style="background:var(--mm-cream-dark);" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF=getCsrf();
+// _confirm: usa mmConfirm (staff_base) si existe, sino confirm() nativo como fallback
+function _confirm(msg) {
+  if (typeof mmConfirm === 'function') return mmConfirm(msg);
+  return Promise.resolve(confirm(msg));
+}
+function filterProducts(){const q=(document.getElementById('searchProd')?.value||'').toLowerCase(),cat=document.getElementById('filterCat')?.value||'';document.querySelectorAll('#productsTable tr').forEach(tr=>{tr.style.display=(!q||(tr.dataset.name||'').includes(q))&&(!cat||tr.dataset.cat===cat)?'':'none';});}
+function filterModificadores(){
+  const q = (document.getElementById('searchMod')?.value || '').toLowerCase().trim();
+  let visible = 0;
+  document.querySelectorAll('.mod-card').forEach(card => {
+    const nombre    = (card.dataset.modNombre    || '').toLowerCase();
+    const productos = (card.dataset.modProductos || '').toLowerCase();
+    const match = !q || nombre.includes(q) || productos.includes(q);
+    card.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  // Mostrar mensaje si no hay coincidencias
+  let empty = document.getElementById('modEmptySearch');
+  if (!empty) {
+    empty = document.createElement('div');
+    empty.id = 'modEmptySearch';
+    empty.className = 'text-center py-4';
+    empty.style.color = 'var(--mm-text-muted)';
+    empty.innerHTML = '<div style="font-size:1.5rem;">🔍</div><p style="font-size:.875rem;">Sin resultados para esa búsqueda.</p>';
+    document.querySelector('.mod-card')?.parentElement?.appendChild(empty);
+  }
+  empty.style.display = (visible === 0 && q) ? '' : 'none';
+}
+function openNewProduct(){document.getElementById('productModalTitle').textContent='Nuevo producto';document.getElementById('productForm').action='{% url "gerente:productos_nuevo" %}';['pNombre','pPrecio','pDesc','pImagen'].forEach(id=>document.getElementById(id).value='');document.getElementById('pDisponible').checked=true;document.getElementById('pCategoria').value='';new bootstrap.Modal(document.getElementById('productModal')).show();}
+function openEditProduct(id,nombre,desc,precio,catId,disponible,img){document.getElementById('productModalTitle').textContent='Editar producto';document.getElementById('productForm').action='{% url "gerente:producto_editar" 0 %}'.replace('/0/',`/${id}/`);document.getElementById('pNombre').value=nombre;document.getElementById('pPrecio').value=precio;document.getElementById('pDesc').value=desc;document.getElementById('pImagen').value=img;document.getElementById('pDisponible').checked=disponible;document.getElementById('pCategoria').value=catId;new bootstrap.Modal(document.getElementById('productModal')).show();}
+async function toggleProduct(id, disponible) {
+  const accion = disponible ? 'desactivar' : 'activar';
+  if (!await _confirm(`¿Deseas ${accion} este producto? Los productos desactivados no aparecen en el menú, pero su historial se conserva.`)) return;
+  const res = await fetch('{% url "gerente:producto_eliminar" 0 %}'.replace('/0/',`/${id}/`),{method:'POST',headers:{'X-CSRFToken':CSRF}});
+  if (res.ok) { showToast(disponible ? 'Producto desactivado' : 'Producto activado', 'success'); setTimeout(()=>location.reload(), 800); }
+  else showToast('Error al cambiar estado del producto', 'error');
+}
+async function deleteCategoria(id,nombre){if(!await _confirm(`¿Eliminar "${nombre}"? Solo es posible si no tiene productos activos.`))return;const res=await fetch('{% url "gerente:categoria_eliminar" 0 %}'.replace('/0/',`/${id}/`),{method:'POST',headers:{'X-CSRFToken':CSRF}});const d=await res.json();if(d.ok){showToast('Categoría eliminada','success');setTimeout(()=>location.reload(),800);}else showToast(d.error||'No se puede eliminar','error');}
+let opcionCount=0;
+let _editingGrupoId = null;  // null = crear, número = editar
+
+function openNewModificador(){
+  _editingGrupoId = null;
+  document.querySelector('#modModal .modal-title').textContent = 'Nuevo grupo de modificadores';
+  document.querySelector('#modModal .btn-primary').textContent = 'Guardar grupo';
+  document.getElementById('mNombre').value='';
+  document.querySelectorAll('#mProducto option').forEach(o=>o.selected=false);
+  document.getElementById('mTipo').value='única';
+  document.getElementById('mMax').value='';
+  document.getElementById('mObligatorio').checked=false;
+  document.getElementById('opcionesContainer').innerHTML='';
+  opcionCount=0;addOpcion();addOpcion();
+  new bootstrap.Modal(document.getElementById('modModal')).show();
+}
+
+async function editarGrupo(id){
+  try {
+    const res = await fetch('{% url "gerente:modificador_editar" 0 %}'.replace('/0/',`/${id}/`));
+    const d = await res.json();
+    if (!d.ok) { showToast('Error al cargar el grupo', 'error'); return; }
+    const g = d.grupo;
+    _editingGrupoId = id;
+    document.querySelector('#modModal .modal-title').textContent = 'Editar grupo de modificadores';
+    document.querySelector('#modModal .btn-primary').textContent = 'Actualizar grupo';
+    document.getElementById('mNombre').value = g.nombre_grupo;
+    document.getElementById('mTipo').value = g.tipo;
+    document.getElementById('mMax').value = g.max_selecciones || '';
+    document.getElementById('mObligatorio').checked = g.es_obligatorio;
+    // Productos
+    document.querySelectorAll('#mProducto option').forEach(o => {
+      o.selected = g.producto_ids.includes(parseInt(o.value));
+    });
+    // Opciones
+    document.getElementById('opcionesContainer').innerHTML = '';
+    opcionCount = 0;
+    g.opciones.forEach(op => addOpcion(op.nombre, op.precio_extra, op.id));
+    if (!g.opciones.length) { addOpcion(); addOpcion(); }
+    new bootstrap.Modal(document.getElementById('modModal')).show();
+  } catch(e) { showToast('Error de red', 'error'); }
+}
+
+function addOpcion(nombre='', extra=0, opId=null){
+  const div=document.createElement('div');
+  div.className='row g-2 mb-2 align-items-center';
+  div.dataset.opId = opId || '';
+  div.innerHTML=`<div class="col-6"><input type="text" class="form-control form-control-sm op-nombre" placeholder="Nombre de la opción" value="${nombre}" style="border-color:var(--mm-border);"></div><div class="col-4"><div class="input-group input-group-sm"><span class="input-group-text" style="background:var(--mm-cream);border-color:var(--mm-border);">+$</span><input type="number" class="form-control op-extra" value="${extra}" step="0.50" min="0" style="border-color:var(--mm-border);"></div></div><div class="col-2"><button type="button" class="btn btn-sm w-100" style="background:var(--mm-cream-dark);" onclick="this.closest('.row').remove()">✕</button></div>`;
+  document.getElementById('opcionesContainer').appendChild(div);
+}
+
+async function saveModificador(){
+  const nombre=document.getElementById('mNombre').value.trim();
+  const producto_ids=[...document.querySelectorAll('#mProducto option:checked')].map(o=>o.value);
+  if(!nombre||!producto_ids.length){showToast('Completa nombre y al menos un producto','error');return;}
+  const opciones=[];
+  document.querySelectorAll('#opcionesContainer .row').forEach(row=>{
+    const n=row.querySelector('.op-nombre').value.trim();
+    const e=parseFloat(row.querySelector('.op-extra').value)||0;
+    if(!n) return;
+    const entry={nombre:n,precio_extra:e};
+    // Incluir id si existe (permite upsert seguro en el backend)
+    if(row.dataset.opId) entry.id=parseInt(row.dataset.opId);
+    opciones.push(entry);
+  });
+  if(!opciones.length){showToast('Agrega al menos una opción','error');return;}
+  const btn=document.querySelector('#modModal .btn-primary');btn.disabled=true;
+  try{
+    const url = _editingGrupoId
+      ? '{% url "gerente:modificador_editar" 0 %}'.replace('/0/',`/${_editingGrupoId}/`)
+      : '{% url "gerente:modificador_crear" %}';
+    const res=await fetch(url,{
+      method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body:JSON.stringify({nombre_grupo:nombre,producto_ids,tipo:document.getElementById('mTipo').value,
+        es_obligatorio:document.getElementById('mObligatorio').checked,
+        max_selecciones:document.getElementById('mMax').value||null,opciones})
+    });
+    const d=await res.json();
+    if(d.ok){bootstrap.Modal.getInstance(document.getElementById('modModal')).hide();location.reload();}
+    else showToast(d.error||'Error','error');
+  }finally{btn.disabled=false;}
+}
+async function deleteGrupo(id){if(!await _confirm('¿Eliminar este grupo y todas sus opciones? Esta acción no se puede deshacer.'))return;const res=await fetch('{% url "gerente:modificador_eliminar" 0 %}'.replace('/0/',`/${id}/`),{method:'POST',headers:{'X-CSRFToken':CSRF}});const d=await res.json();if(d.ok){showToast('Grupo eliminado','success');setTimeout(()=>location.reload(),800);}else showToast(d.error||'Error al eliminar','error');}
+async function togglePlantilla(id, btn){const res=await fetch('{% url "gerente:modificador_toggle_plantilla" 0 %}'.replace('/0/',`/${id}/`),{method:'POST',headers:{'X-CSRFToken':CSRF}});const d=await res.json();if(d.ok){const ico=btn.querySelector('i');ico.className=d.es_plantilla?'bi bi-bookmark-fill':'bi bi-bookmark';btn.style.color=d.es_plantilla?'var(--mm-gold)':'var(--mm-text-muted)';btn.title=d.es_plantilla?'Quitar plantilla':'Marcar como plantilla';showToast(d.es_plantilla?'Marcado como plantilla':'Plantilla eliminada','success');}}
+
+// Datos de plantillas embebidos para acceso offline
+const PLANTILLAS_DATA = {
+  {% for pt in plantillas %}"{{ pt.id }}": {nombre:"{{ pt.nombre_grupo|escapejs }}", tipo:"{{ pt.tipo }}", es_obligatorio:{{ pt.es_obligatorio|yesno:"true,false" }}, max_selecciones:{{ pt.max_selecciones|default:"null" }}, opciones:[{% for op in pt.opciones.all %}{nombre:"{{ op.nombre_opcion|escapejs }}", precio_extra:{{ op.precio_extra }}}{% if not forloop.last %},{% endif %}{% endfor %}]},{% endfor %}
+};
+
+function aplicarPlantilla(){
+  const sel = document.getElementById('mPlantilla');
+  if (!sel || !sel.value) { showToast('Selecciona una plantilla','error'); return; }
+  const pt = PLANTILLAS_DATA[sel.value];
+  if (!pt) return;
+  document.getElementById('mNombre').value = pt.nombre;
+  document.getElementById('mTipo').value = pt.tipo;
+  document.getElementById('mObligatorio').checked = pt.es_obligatorio;
+  document.getElementById('mMax').value = pt.max_selecciones || '';
+  // Reset opciones
+  document.getElementById('opcionesContainer').innerHTML = '';
+  opcionCount = 0;
+  pt.opciones.forEach(op => {
+    addOpcion();
+    const rows = document.querySelectorAll('#opcionesContainer .row');
+    const last = rows[rows.length - 1];
+    last.querySelector('.op-nombre').value = op.nombre;
+    last.querySelector('.op-extra').value = op.precio_extra;
+  });
+  if (!pt.opciones.length) { addOpcion(); addOpcion(); }
+  showToast(`Plantilla "${pt.nombre}" aplicada`, 'success');
+}
+function onPromoTipoChange(sel) {
+  const desc = sel.options[sel.selectedIndex]?.dataset.desc || '';
+  const fieldValor = document.getElementById('fieldValorDescuento');
+  const fieldCant  = document.getElementById('fieldCantidadMinima');
+  const fieldBen   = document.getElementById('fieldProductosBeneficiados');
+  const info2x1    = document.getElementById('promo2x1Info');
+  const labelValor = document.getElementById('labelValorDescuento');
+  const promoValor = document.getElementById('promoValor');
+  const aplicacion = document.getElementById('promoAplicacion');
+  const hint       = document.getElementById('promoTipoHint');
+
+  const hints = {
+    'Porcentaje':      '💡 Ej: 15% de descuento → cada producto seleccionado se cobra al 85% de su precio.',
+    'Monto fijo':      '💡 Ej: $20 de descuento → se resta un monto fijo del total del ticket.',
+    '2x1':             '💡 Lleva 2 productos y paga solo 1. El cliente obtiene el de menor precio gratis.',
+    'Lleva X paga Y':  '💡 Ej: lleva 3 paga 2 → pon Pagas=2 y Cantidad mínima=3.',
+    'Combo precio fijo':'💡 Ej: Combo especial por $99. Elige los productos del combo en "Productos beneficiados".',
+  };
+  if (hint) {
+    const msg = hints[desc] || '';
+    hint.textContent = msg;
+    hint.style.display = msg ? 'block' : 'none';
+  }
+
+  fieldValor.style.display=''; fieldCant.style.display='none';
+  fieldBen.style.display='none'; info2x1.style.display='none';
+  if(desc==='2x1'){fieldValor.style.display='none';info2x1.style.display='';}
+  else if(desc==='Porcentaje'){labelValor.textContent='Descuento % *';promoValor.placeholder='ej. 15';}
+  else if(desc==='Monto fijo'){labelValor.textContent='Monto ($) *';promoValor.placeholder='ej. 20';}
+  else if(desc==='Lleva X paga Y'){labelValor.textContent='Pagas (Y) *';promoValor.placeholder='ej. 2';fieldCant.style.display='';}
+  else if(desc==='Combo precio fijo'){labelValor.textContent='Precio combo ($) *';promoValor.placeholder='ej. 99';fieldBen.style.display='';aplicacion.value='combo';}
+}
+
+// --- Edición de promociones ---
+async function editarPromo(id) {
+  const res = await fetch(`/gerente/menu/promociones/${id}/editar/`);
+  const promo = await res.json();
+  if (!promo.id) return;
+
+  document.getElementById('promoId').value = promo.id;
+  document.getElementById('promoForm').action = `/gerente/menu/promociones/${id}/editar/`;
+  document.querySelector('#promoModal .modal-title').textContent = 'Editar promoción';
+  document.querySelector('#promoModal [type="submit"]').textContent = 'Actualizar promoción';
+
+  document.querySelector('input[name="titulo"]').value = promo.titulo;
+  document.getElementById('promoTipoDescuento').value = promo.tipo_descuento_id;
+  document.getElementById('promoAplicacion').value = promo.aplicacion;
+  document.getElementById('promoValor').value = promo.valor_descuento || '';
+  document.querySelector('input[name="cantidad_minima"]').value = promo.cantidad_minima || '';
+  document.querySelector('input[name="fecha_inicio"]').value = promo.fecha_inicio;
+  document.querySelector('input[name="fecha_fin"]').value = promo.fecha_fin;
+  document.getElementById('promoImagenUrl').value = promo.imagen_url || '';
+
+  // Seleccionar productos aplicables
+  const selectAplicables = document.querySelector('select[name="productos_aplicables"]');
+  [...selectAplicables.options].forEach(opt => {
+    opt.selected = promo.productos_aplicables.includes(parseInt(opt.value));
+  });
+
+  // Seleccionar productos beneficiados
+  const selectBeneficiados = document.querySelector('select[name="productos_beneficiados"]');
+  if (selectBeneficiados) {
+    [...selectBeneficiados.options].forEach(opt => {
+      opt.selected = promo.productos_beneficiados.includes(parseInt(opt.value));
+    });
+  }
+
+  onPromoTipoChange(document.getElementById('promoTipoDescuento'));
+  new bootstrap.Modal(document.getElementById('promoModal')).show();
+}
+
+function openNewPromo() {
+  document.getElementById('promoId').value = '';
+  document.getElementById('promoForm').action = '{% url "gerente:promociones" %}';
+  document.getElementById('promoImagenUrl').value = '';
+  document.querySelector('#promoModal .modal-title').textContent = 'Nueva promoción';
+  document.querySelector('#promoModal [type="submit"]').textContent = 'Crear promoción';
+
+  document.querySelector('input[name="titulo"]').value = '';
+  document.getElementById('promoTipoDescuento').selectedIndex = 0;
+  document.getElementById('promoAplicacion').value = 'item';
+  document.getElementById('promoValor').value = '';
+  document.querySelector('input[name="cantidad_minima"]').value = '';
+  document.querySelector('input[name="fecha_inicio"]').value = '';
+  document.querySelector('input[name="fecha_fin"]').value = '';
+
+  const selectAplicables = document.querySelector('select[name="productos_aplicables"]');
+  [...selectAplicables.options].forEach(opt => opt.selected = false);
+  const selectBeneficiados = document.querySelector('select[name="productos_beneficiados"]');
+  if (selectBeneficiados) [...selectBeneficiados.options].forEach(opt => opt.selected = false);
+
+  onPromoTipoChange(document.getElementById('promoTipoDescuento'));
+  new bootstrap.Modal(document.getElementById('promoModal')).show();
+}
+
+async function togglePromo(id,cb){const res=await fetch('{% url "gerente:promocion_toggle" 0 %}'.replace('/0/',`/${id}/`),{method:'POST',headers:{'X-CSRFToken':CSRF}});const d=await res.json();if(!d.ok){cb.checked=!cb.checked;showToast('Error','error');}else{showToast(d.activa?'Promoción activada':'Promoción desactivada','success');setTimeout(()=>location.reload(),800);}}
+async function deletePromo(id){if(!await _confirm('¿Eliminar esta promoción? Esta acción no se puede deshacer.'))return;const res=await fetch('{% url "gerente:promocion_eliminar" 0 %}'.replace('/0/',`/${id}/`),{method:'POST',headers:{'X-CSRFToken':CSRF}});const dp=await res.json();if(dp.ok){showToast('Promoción eliminada','success');setTimeout(()=>location.reload(),800);}else showToast(dp.error||'Error','error');}
+
+// --- Ubicaciones de mesa ---
+function abrirNuevaUbicacion(){
+  const nombre = prompt('Nombre de la nueva ubicación (ej. Terraza, Interior, Barra):');
+  if (!nombre || !nombre.trim()) return;
+  fetch('{% url "gerente:ubicacion_crear" %}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({nombre: nombre.trim()})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      const sel = document.getElementById('ubicacionSelect');
+      if (!sel.querySelector(`option[value="${d.id}"]`)) {
+        const opt = new Option(d.nombre, d.id);
+        sel.appendChild(opt);
+      }
+      sel.value = d.id;
+      showToast(d.created ? `Ubicación "${d.nombre}" creada` : `Ubicación "${d.nombre}" ya existía`, 'success');
+    } else {
+      showToast(d.error || 'Error al crear ubicación', 'error');
+    }
+  });
+}
+
+function editarUbicacion(id, nombreActual) {
+  const nuevoNombre = prompt(`Nuevo nombre para "${nombreActual}":`, nombreActual);
+  if (!nuevoNombre || !nuevoNombre.trim() || nuevoNombre.trim() === nombreActual) return;
+  fetch(`/gerente/mesas/ubicacion/${id}/editar/`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({nombre: nuevoNombre.trim()})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      // Actualizar chip en lista
+      const chip = document.querySelector(`[data-ub-id="${id}"] .ub-nombre`);
+      if (chip) chip.textContent = d.nombre;
+      // Actualizar opción en select
+      const opt = document.querySelector(`#ubicacionSelect option[value="${id}"]`);
+      if (opt) opt.textContent = d.nombre;
+      showToast(`Ubicación renombrada a "${d.nombre}"`, 'success');
+    } else {
+      showToast(d.error || 'Error al editar ubicación', 'error');
+    }
+  });
+}
+
+async function eliminarUbicacion(id, nombre) {
+  if (!await _confirm(`¿Eliminar la ubicación "${nombre}"? Solo es posible si no tiene mesas asignadas.`)) return;
+  fetch(`/gerente/mesas/ubicacion/${id}/eliminar/`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      // Remover chip de la lista
+      const chip = document.querySelector(`[data-ub-id="${id}"]`);
+      if (chip) chip.remove();
+      // Remover del select
+      const opt = document.querySelector(`#ubicacionSelect option[value="${id}"]`);
+      if (opt) opt.remove();
+      showToast(`Ubicación "${nombre}" eliminada`, 'success');
+    } else {
+      showToast(d.error || 'Error al eliminar ubicación', 'error');
+    }
+  });
+}
+
+// --- Funciones QR (usando base64 del backend) ---
+function showQR(base64Data, mesaId) {
+    const base = window.location.origin;
+    const qrUrl = `${base}/bienvenida/?mesa=${mesaId}`;
+    
+    document.getElementById('qrTitle').textContent = `QR Mesa ${mesaId}`;
+    document.getElementById('qrUrl').textContent = qrUrl;
+    
+    const qrImg = document.getElementById('qrModalImg');
+    if (qrImg) {
+        qrImg.src = `data:image/png;base64,${base64Data}`;
+    }
+    
+    new bootstrap.Modal(document.getElementById('qrModal')).show();
+}
+
+function downloadQR() {
+    const img = document.getElementById('qrModalImg');
+    const a = document.createElement('a');
+    const title = document.getElementById('qrTitle').textContent.replace('QR Mesa ', '');
+    a.download = `qr-mesa-${title}.png`;
+    a.href = img.src;
+    a.click();
+}
+</script>
+{% endblock %}

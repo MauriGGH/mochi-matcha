@@ -69,7 +69,7 @@
     </div>
     <div class="kds-col-body" id="pendingCol">
       {% for pedido in pedidos %}
-      <div class="kds-card" id="ticket-{{ pedido.pk }}" data-ts="{{ pedido.fecha_hora_ingreso|date:'U' }}" data-estado="{{ pedido.estado }}">
+      <div class="kds-card" id="ticket-{{ pedido.pk }}" data-ts="{{ pedido.fecha_hora_ingreso|date:'U' }}">
         <div class="kds-card-header">
           <div class="d-flex align-items-center gap-2">
             <span class="kds-table-badge">Mesa {{ pedido.sesion.mesa.numero_mesa }}</span>
@@ -78,7 +78,7 @@
           <span class="kds-timer green" id="timer-{{ pedido.pk }}">0:00</span>
         </div>
         <div class="kds-items">
-          {% for d in pedido.detalles_filtrados %}
+          {% for d in pedido.detalles.all %}
           <div class="kds-item">
             <div>
               <span class="kds-item-qty">{{ d.cantidad }}×</span>{{ d.producto.nombre }}
@@ -94,12 +94,12 @@
         </div>
         <div class="d-flex gap-2">
           {% if pedido.estado == 'recibido' %}
-          <button class="btn-listo btn-comenzar" onclick="marcarListo({{ pedido.pk }}, this)">
-            <i class="bi bi-play-circle me-2"></i>Comenzar preparación
+          <button class="btn-listo" onclick="marcarListo({{ pedido.pk }}, this)">
+            <i class="bi bi-check-circle me-2"></i>Marcar como Listo
           </button>
           {% else %}
           <button class="btn-listo" onclick="marcarListo({{ pedido.pk }}, this)">
-            <i class="bi bi-check2-all me-2"></i>Marcar como Listo
+            <i class="bi bi-check2-all me-2"></i>Listo para entregar
           </button>
           {% endif %}
         </div>
@@ -207,8 +207,8 @@
 const CSRF = document.cookie.split(';').find(c=>c.trim().startsWith('csrftoken='))?.split('=')[1] || '';
 const AREA = '{{ area }}';
 
-// Settings — carga desde BD (inyectada por el servidor via template de gerente) o fallback localStorage
-let settings = JSON.parse(localStorage.getItem('kds_settings') || '{"yellow":{{ semaforo_yellow|default:8 }},"red":{{ semaforo_red|default:15 }}}');
+// Settings (persisted in localStorage)
+let settings = JSON.parse(localStorage.getItem('kds_settings') || '{"yellow":5,"red":10}');
 
 function applySettings() {
   document.getElementById('yellowThresh').value = settings.yellow;
@@ -267,10 +267,9 @@ function updateTimers() {
 setInterval(updateTimers, 1000);
 updateTimers();
 
-// Mark ready — toggle recibido→preparando→listo
+// Mark ready
 async function marcarListo(id, btn) {
   btn.disabled = true;
-  const originalHTML = btn.innerHTML;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
   try {
     const res = await fetch('{% url "cocina:marcar_listo" %}', {
@@ -279,46 +278,74 @@ async function marcarListo(id, btn) {
       body: JSON.stringify({ pedido_id: id })
     });
     const data = await res.json();
-    if (data.ok) {
-      const card = document.getElementById(`ticket-${id}`);
-      if (card) {
-        card.dataset.estado = data.nuevo_estado;
-        if (data.nuevo_estado === 'preparando') {
-          // Actualizar solo el botón al nuevo texto
-          btn.innerHTML = '<i class="bi bi-check2-all me-2"></i>Marcar como Listo';
-          btn.disabled = false;
-        } else {
-          // listo — el poll lo moverá a la columna derecha, quitar el card ya
-          delete timestamps[id];
-          card.remove();
-        }
-      }
-      pollKDS();
-    } else {
-      btn.innerHTML = originalHTML;
-      btn.disabled = false;
-    }
-  } catch(e) {
-    btn.innerHTML = originalHTML;
-    btn.disabled = false;
-  }
+    if (data.ok) pollKDS();
+  } catch(e) { btn.disabled = false; }
 }
 
 // Polling
+async function pollKDS() {
+  try {
+    const res = await fetch(`{% url "cocina:pedidos_json" %}?area=${AREA}`);
+    const data = await res.json();
+    if (!data.ok) return;
+
+    // Update pending
+    const pendCol = document.getElementById('pendingCol');
+    document.getElementById('pendCount').textContent = data.pendientes.length;
+    document.getElementById('doneCount').textContent = data.listos.length;
+
+    data.pendientes.forEach(p => {
+      if (!document.getElementById(`ticket-${p.id}`)) {
+        // Add new ticket
+        const ts = new Date(p.fecha).getTime();
+        timestamps[p.id] = ts || Date.now();
+        const card = buildCard(p);
+        pendCol.insertAdjacentHTML('afterbegin', card);
+      }
+    });
+
+    // Remove completed from pending
+    document.querySelectorAll('#pendingCol .kds-card').forEach(card => {
+      const id = parseInt(card.id.replace('ticket-',''));
+      if (!data.pendientes.find(p => p.id === id)) card.remove();
+    });
+
+    // Update done column
+    const doneCol = document.getElementById('doneCol');
+    data.listos.forEach(p => {
+      if (!document.getElementById(`done-${p.id}`)) {
+        const items = p.items.map(i => `${i.cantidad}× ${i.nombre}`).join(', ');
+        doneCol.insertAdjacentHTML('beforeend', `
+          <div style="background:#1e1e1e; border-radius:var(--radius-sm); padding:.75rem 1rem; border-left:3px solid var(--kds-green); margin-bottom:.5rem;" id="done-${p.id}">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <div class="d-flex gap-2">
+                <span class="kds-table-badge">Mesa ${p.mesa}</span>
+                <span style="font-size:.8rem; color:#aaa;">${p.alias}</span>
+              </div>
+              <i class="bi bi-check-circle-fill" style="color:var(--kds-green);"></i>
+            </div>
+            <div style="font-size:.8rem; color:#888;">${items}</div>
+            <div style="font-size:.72rem; color:#555; margin-top:.25rem;">El mesero registra la entrega desde su panel</div>
+          </div>`);
+      }
+    });
+    document.querySelectorAll('#doneCol [id^="done-"]').forEach(card => {
+      const id = parseInt(card.id.replace('done-',''));
+      if (!data.listos.find(p => p.id === id)) card.remove();
+    });
+  } catch(e) {}
+}
+
 function buildCard(p) {
-  const items = (p.detalles_filtrados || p.items || []).map(i => `
+  const items = p.items.map(i => `
     <div class="kds-item">
       <div>
         <span class="kds-item-qty">${i.cantidad}×</span>${i.nombre}
-        ${i.modificadores && i.modificadores.length ? `<div class="kds-item-mods">${i.modificadores.join(' · ')}</div>` : ''}
+        ${i.modificadores.length ? `<div class="kds-item-mods">${i.modificadores.join(' · ')}</div>` : ''}
         ${i.notas ? `<div class="kds-item-notes" style="color:#e74c3c; font-weight:600;">⚠ ${i.notas.toUpperCase()}</div>` : ''}
       </div>
     </div>`).join('');
-  const btnLabel = p.estado === 'recibido'
-    ? '<i class="bi bi-play-circle me-2"></i>Comenzar preparación'
-    : '<i class="bi bi-check2-all me-2"></i>Marcar como Listo';
-  const ts = Math.floor(new Date(p.fecha).getTime() / 1000);
-  return `<div class="kds-card" id="ticket-${p.id}" data-ts="${ts}" data-estado="${p.estado}">
+  return `<div class="kds-card" id="ticket-${p.id}" data-ts="${Math.floor(Date.now()/1000)}">
     <div class="kds-card-header">
       <div class="d-flex align-items-center gap-2">
         <span class="kds-table-badge">Mesa ${p.mesa}</span>
@@ -327,92 +354,12 @@ function buildCard(p) {
       <span class="kds-timer green" id="timer-${p.id}">0:00</span>
     </div>
     <div class="kds-items">${items}</div>
-    <button class="btn-listo" onclick="marcarListo(${p.id}, this)">${btnLabel}</button>
+    <button class="btn-listo" onclick="marcarListo(${p.id}, this)">
+      <i class="bi bi-check-circle me-2"></i>Marcar como Listo
+    </button>
   </div>`;
 }
 
-// Llamada inicial + intervalo robusto con anti-solapamiento y pausa en pestaña inactiva
-let _kdsPolling = false;
-let _kdsLastTs  = 0;
-
-async function pollKDS() {
-  if (_kdsPolling) return;
-  if (document.visibilityState === 'hidden') return;
-  _kdsPolling = true;
-  try {
-    const res  = await fetch(`{% url "cocina:pedidos_json" %}?area=${AREA}`);
-    const data = await res.json();
-    const serverTs = data.ts || Date.now();
-    if (serverTs < _kdsLastTs) return;
-    _kdsLastTs = serverTs;
-    if (!data.ok) return;
-
-    const pendCol = document.getElementById('pendingCol');
-    document.getElementById('pendCount').textContent = data.pendientes.length;
-    document.getElementById('doneCount').textContent = data.listos.length;
-
-    // Añadir nuevas tarjetas pendientes
-    data.pendientes.forEach(p => {
-      if (!document.getElementById(`ticket-${p.id}`)) {
-        const ts = new Date(p.fecha).getTime();
-        timestamps[p.id] = ts || Date.now();
-        pendCol.insertAdjacentHTML('afterbegin', buildCard(p));
-      } else {
-        const card = document.getElementById(`ticket-${p.id}`);
-        if (card && card.dataset.estado !== p.estado) {
-          card.dataset.estado = p.estado;
-          const btn = card.querySelector('.btn-listo');
-          if (btn && !btn.disabled) {
-            btn.innerHTML = p.estado === 'recibido'
-              ? '<i class="bi bi-play-circle me-2"></i>Comenzar preparación'
-              : '<i class="bi bi-check2-all me-2"></i>Marcar como Listo';
-          }
-        }
-      }
-    });
-
-    // Quitar tarjetas que ya no están pendientes
-    document.querySelectorAll('#pendingCol .kds-card').forEach(card => {
-      const id = parseInt(card.id.replace('ticket-',''));
-      if (!data.pendientes.find(p => p.id === id)) {
-        delete timestamps[id];
-        card.remove();
-      }
-    });
-
-    // Columna de listos
-    const doneCol = document.getElementById('doneCol');
-    data.listos.forEach(p => {
-      if (!document.getElementById(`done-${p.id}`)) {
-        const items = (p.detalles_filtrados || p.items || [])
-          .map(i => `${i.cantidad}× ${i.nombre}`).join(', ');
-        doneCol.insertAdjacentHTML('beforeend', `
-          <div style="background:#1e1e1e;border-radius:var(--radius-sm);padding:.75rem 1rem;border-left:3px solid var(--kds-green);margin-bottom:.5rem;" id="done-${p.id}">
-            <div class="d-flex align-items-center justify-content-between mb-1">
-              <div class="d-flex gap-2">
-                <span class="kds-table-badge">Mesa ${p.mesa}</span>
-                <span style="font-size:.8rem;color:#aaa;">${p.alias}</span>
-              </div>
-              <i class="bi bi-check-circle-fill" style="color:var(--kds-green);"></i>
-            </div>
-            <div style="font-size:.8rem;color:#888;">${items}</div>
-            <div style="font-size:.72rem;color:#555;margin-top:.25rem;">El mesero registra la entrega desde su panel</div>
-          </div>`);
-      }
-    });
-    document.querySelectorAll('#doneCol [id^="done-"]').forEach(card => {
-      const id = parseInt(card.id.replace('done-',''));
-      if (!data.listos.find(p => p.id === id)) card.remove();
-    });
-    updateTimers();
-  } catch(e) { console.warn('pollKDS error:', e); }
-  finally { _kdsPolling = false; }
-}
-
-document.addEventListener('DOMContentLoaded', () => pollKDS());
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') pollKDS();
-});
 setInterval(pollKDS, 3000);
 </script>
 </body>

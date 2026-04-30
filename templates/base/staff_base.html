@@ -37,7 +37,7 @@
 
   <div class="sidebar-footer">
     <div class="d-flex align-items-center gap-2 px-3 py-2">
-      <div class="avatar-circle">{{ request.user.nombre|first|upper }}</div>
+      <div class="avatar-circle">{{ request.user.nombre|default:"?"|first|upper }}</div>
       <div style="min-width:0; flex:1;">
         <div class="fw-semibold text-truncate" style="font-size:.8rem; line-height:1.2; color:#fff;">{{ request.user.nombre }}</div>
         <div style="font-size:.7rem; color:rgba(255,255,255,.55);">{{ request.user.get_rol_display }}</div>
@@ -108,6 +108,45 @@ function showToast(msg, type='') {
 
 function getCsrf() {
   return document.cookie.split(';').find(c=>c.trim().startsWith('csrftoken='))?.split('=')[1] || '';
+}
+
+// Modal de confirmación genérico — reemplaza confirm() nativo en toda la app
+function mmConfirm(mensaje, labelOk = 'Confirmar') {
+  return new Promise(resolve => {
+    let el = document.getElementById('_mmConfirmModal');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = '_mmConfirmModal';
+      el.className = 'modal fade';
+      el.setAttribute('tabindex', '-1');
+      el.innerHTML = `
+        <div class="modal-dialog modal-dialog-centered" style="max-width:420px;">
+          <div class="modal-content" style="border-radius:var(--radius-md,12px);border:none;box-shadow:0 8px 32px rgba(0,0,0,.15);">
+            <div class="modal-body p-4">
+              <h5 class="fw-bold mb-2" id="_mmConfirmTitle">Confirmar acción</h5>
+              <p id="_mmConfirmMsg" class="text-muted mb-4" style="font-size:.9rem;"></p>
+              <div class="d-flex gap-2">
+                <button id="_mmConfirmOk" class="btn flex-grow-1 py-2 fw-semibold"
+                  style="background:var(--mm-danger,#d9534f);color:#fff;"></button>
+                <button class="btn flex-grow-1 py-2" data-bs-dismiss="modal"
+                  style="background:var(--mm-cream-dark,#e9e4dc);">Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      document.body.appendChild(el);
+    }
+    document.getElementById('_mmConfirmMsg').textContent = mensaje;
+    document.getElementById('_mmConfirmOk').textContent  = labelOk;
+    const m = new bootstrap.Modal(el);
+    // limpiar listeners anteriores clonando el botón OK
+    const okOld = document.getElementById('_mmConfirmOk');
+    const okNew = okOld.cloneNode(true);
+    okOld.parentNode.replaceChild(okNew, okOld);
+    el.addEventListener('hidden.bs.modal', () => resolve(false), { once: true });
+    document.getElementById('_mmConfirmOk').addEventListener('click', () => { m.hide(); resolve(true); }, { once: true });
+    m.show();
+  });
 }
 </script>
 {% block extra_scripts %}{% endblock %}

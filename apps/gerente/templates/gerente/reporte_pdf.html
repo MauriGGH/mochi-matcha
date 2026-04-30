@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #222; background: #fff; }
+  .page { padding: 2cm 2cm; }
+  h1 { font-size: 20px; color: #2D6A4F; margin-bottom: 4px; }
+  .subtitle { font-size: 11px; color: #666; margin-bottom: 24px; }
+  h2 { font-size: 13px; color: #2D6A4F; border-bottom: 2px solid #D8F3DC;
+       padding-bottom: 4px; margin: 20px 0 10px; }
+
+  /* KPI row — tabla en lugar de flex (evita bug cairocffi/WeasyPrint 62.x) */
+  .kpi-table { width: 100%; border-collapse: separate; border-spacing: 8px 0;
+               margin-bottom: 24px; }
+  .kpi-table td { background: #D8F3DC; border-radius: 6px; padding: 10px 14px;
+                  vertical-align: top; width: 25%; }
+  .kpi-value { font-size: 17px; font-weight: 700; color: #2D6A4F; }
+  .kpi-label { font-size: 9px; color: #555; text-transform: uppercase;
+               letter-spacing: .06em; margin-top: 2px; }
+
+  /* Tablas de datos */
+  table.data { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  table.data thead th { background: #2D6A4F; color: #fff; padding: 6px 10px;
+                        text-align: left; font-size: 10px; text-transform: uppercase;
+                        letter-spacing: .05em; }
+  table.data tbody tr:nth-child(even) { background: #F8FDF9; }
+  table.data tbody td { padding: 5px 10px; border-bottom: 1px solid #E9F5EB; font-size: 10px; }
+  .text-right { text-align: right; }
+  .footer { margin-top: 30px; font-size: 9px; color: #999; text-align: center;
+            border-top: 1px solid #ddd; padding-top: 8px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Reporte Mochi Matcha</h1>
+  <div class="subtitle">Período: {{ desde|date:"d/m/Y" }} — {{ hasta|date:"d/m/Y" }}</div>
+
+  <!-- KPIs -->
+  <table class="kpi-table">
+    <tr>
+      <td>
+        <div class="kpi-value">${{ total|floatformat:2 }}</div>
+        <div class="kpi-label">Ventas totales</div>
+      </td>
+      <td>
+        <div class="kpi-value">{{ tickets }}</div>
+        <div class="kpi-label">Pedidos</div>
+      </td>
+      <td>
+        <div class="kpi-value">${{ ticket_promedio|floatformat:2 }}</div>
+        <div class="kpi-label">Ticket promedio</div>
+      </td>
+      <td>
+        <div class="kpi-value">{{ cancelaciones|length }}</div>
+        <div class="kpi-label">Cancelaciones</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Ventas por día -->
+  <h2>Ventas por día</h2>
+  <table class="data">
+    <thead><tr><th>Fecha</th><th class="text-right">Pedidos</th><th class="text-right">Total</th></tr></thead>
+    <tbody>
+      {% for row in ventas_por_dia %}
+      <tr>
+        <td>{{ row.dia }}</td>
+        <td class="text-right">{{ row.tickets }}</td>
+        <td class="text-right">${{ row.total|floatformat:2 }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="3" style="text-align:center;color:#999;">Sin datos en el período</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Top productos -->
+  <h2>Productos más vendidos</h2>
+  <table class="data">
+    <thead><tr><th>#</th><th>Producto</th><th class="text-right">Cant.</th><th class="text-right">Ingresos</th></tr></thead>
+    <tbody>
+      {% for row in top_productos %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td>{{ row.producto__nombre }}</td>
+        <td class="text-right">{{ row.cantidad }}</td>
+        <td class="text-right">${{ row.ingreso|floatformat:2 }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" style="text-align:center;color:#999;">Sin datos</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if cancelaciones %}
+  <h2>Cancelaciones</h2>
+  <table class="data">
+    <thead><tr><th>ID</th><th>Fecha</th><th>Mesa</th><th>Cliente</th><th>Motivo</th></tr></thead>
+    <tbody>
+      {% for row in cancelaciones %}
+      <tr>
+        <td>#{{ row.id }}</td>
+        <td>{{ row.fecha_hora_ingreso|date:"d/m/Y H:i" }}</td>
+        <td>Mesa {{ row.sesion__mesa__numero_mesa }}</td>
+        <td>{{ row.sesion__alias|default:"—" }}</td>
+        <td>{{ row.motivo_cancelacion|default:"—"|truncatechars:50 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <div class="footer">Generado automáticamente por Mochi Matcha · {{ hasta|date:"d/m/Y" }}</div>
+</div>
+</body>
+</html>

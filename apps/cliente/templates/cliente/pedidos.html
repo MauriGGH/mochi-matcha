@@ -1,0 +1,251 @@
+{% extends "base/cliente_base.html" %}
+{% load static %}
+
+{% block title %}Mis pedidos — Mochi Matcha{% endblock %}
+
+{% block client_header %}
+<header class="client-header px-3 py-3 d-flex align-items-center justify-content-between"
+        style="background:var(--mm-white); border-bottom:1px solid var(--mm-border); position:sticky; top:0; z-index:50;">
+  <div class="d-flex align-items-center gap-2">
+    <a href="{% url 'cliente:menu' %}" style="color:var(--mm-text); text-decoration:none;"><i class="bi bi-arrow-left fs-5"></i></a>
+    <span class="fw-bold" style="font-size:1rem;">Mis pedidos</span>
+  </div>
+  <span style="font-size:.8rem; color:var(--mm-text-muted);">Mesa {{ mesa.numero_mesa }} · <span class="fw-bold" style="font-family:var(--font-mono);">PIN: {{ pin_mesa }}</span></span>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="px-3 pt-3 pb-2">
+
+{% if not pedidos %}
+<div class="text-center py-5">
+  <div style="font-size:3rem; color:var(--mm-border); margin-bottom:1rem;">📋</div>
+  <h6 class="fw-bold mb-1" style="color:var(--mm-text-muted);">Aún no tienes pedidos</h6>
+  <p style="font-size:.875rem; color:var(--mm-text-muted);">Explora el menú y haz tu primer pedido</p>
+  <a href="{% url 'cliente:menu' %}" class="btn btn-primary mt-2">Ver el menú</a>
+</div>
+{% else %}
+
+<div id="ordersList">
+{% for pedido in pedidos %}
+<div class="order-card mb-3" id="order-{{ pedido.pk }}">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <span class="fw-bold" style="font-size:.875rem;">Pedido #{{ pedido.pk }}</span>
+    <span class="order-status-badge status-{{ pedido.estado }}">{{ pedido.get_estado_display }}</span>
+  </div>
+
+  <!-- Progress stepper -->
+  <div class="order-steps mb-2">
+    <div class="step-dot {% if pedido.estado != 'cancelado' %}{% if pedido.estado in 'preparando,listo,entregado' %}done{% elif pedido.estado == 'recibido' %}current{% endif %}{% endif %}">
+      <i class="bi bi-check" style="font-size:.6rem;"></i>
+    </div>
+    <div class="step-line {% if pedido.estado in 'preparando,listo,entregado' %}done{% endif %}"></div>
+    <div class="step-dot {% if pedido.estado in 'preparando,listo,entregado' %}{% if pedido.estado in 'listo,entregado' %}done{% elif pedido.estado == 'preparando' %}current{% endif %}{% endif %}">
+      🍳
+    </div>
+    <div class="step-line {% if pedido.estado in 'listo,entregado' %}done{% endif %}"></div>
+    <div class="step-dot {% if pedido.estado in 'listo,entregado' %}{% if pedido.estado == 'entregado' %}done{% else %}current{% endif %}{% endif %}">
+      ✓
+    </div>
+  </div>
+  <div class="d-flex justify-content-between mb-2" style="font-size:.68rem; color:var(--mm-text-muted); padding: 0 2px;">
+    <span>Recibido</span><span>Preparando</span><span>Listo</span>
+  </div>
+
+  <!-- Items -->
+  <div class="mt-2">
+  {% for detalle in pedido.detalles.all %}
+  <div style="font-size:.85rem; padding:.25rem 0; border-bottom:1px solid var(--mm-border);" class="d-flex justify-content-between">
+    <span>{{ detalle.cantidad }}× {{ detalle.producto.nombre }}</span>
+    <span style="color:var(--mm-text-muted);">${{ detalle.subtotal_calculado|floatformat:2 }}</span>
+  </div>
+  {% endfor %}
+  </div>
+
+  <!-- Animación preparando -->
+  {% if pedido.estado == 'preparando' %}
+  <div class="mt-2 d-flex align-items-center gap-2" style="font-size:.8rem; color:var(--mm-warning);">
+    <span class="spinner-grow spinner-grow-sm" role="status" style="width:.5rem; height:.5rem; background:var(--mm-warning);"></span>
+    En preparación…
+  </div>
+  {% elif pedido.estado == 'listo' %}
+  <div class="mt-2 d-flex align-items-center gap-2" style="font-size:.8rem; color:var(--mm-success);">
+    <i class="bi bi-check-circle-fill"></i> ¡Listo! Tu mesero lo llevará pronto
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+</div>
+
+<!-- Total general -->
+<div class="cart-total-bar mt-2 mb-4">
+  <div class="d-flex justify-content-between fw-bold">
+    <span>Total consumido</span>
+    <span style="color:var(--mm-green);">${{ total_general|floatformat:2 }}</span>
+  </div>
+</div>
+
+<!-- Solicitar cuenta -->
+<button class="btn btn-primary w-100 py-3 mb-2" onclick="openBillModal()">
+  <i class="bi bi-receipt me-2"></i>Pedir la cuenta
+</button>
+<button class="btn w-100 py-2 mb-3" style="background:var(--mm-cream-dark);" onclick="solicitarAyuda()">
+  <i class="bi bi-bell me-2"></i>Llamar al mesero
+</button>
+
+{% endif %}
+</div>
+
+<!-- Modal: Pedir cuenta -->
+<div class="modal fade" id="billModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px;">
+    <div class="modal-content rounded-4 border-0">
+      <div class="modal-body p-4">
+        <h5 class="fw-bold mb-1">Solicitar cuenta</h5>
+        <p style="font-size:.875rem; color:var(--mm-text-muted); margin-bottom:1.5rem;">¿Cómo quieres pagar?</p>
+        <div class="row g-3 mb-4">
+          <div class="col-6">
+            <label class="option-card d-block text-center" style="cursor:pointer;">
+              <input type="radio" name="tipoCobro" value="individual" class="d-none" checked>
+              <i class="bi bi-person-fill" style="font-size:1.75rem; color:var(--mm-green);"></i>
+              <div class="fw-bold mt-2" style="font-size:.875rem;">Solo yo</div>
+              <div style="font-size:.75rem; color:var(--mm-text-muted);">Mi consumo</div>
+            </label>
+          </div>
+          <div class="col-6">
+            <label class="option-card d-block text-center" style="cursor:pointer;">
+              <input type="radio" name="tipoCobro" value="grupal" class="d-none">
+              <i class="bi bi-people-fill" style="font-size:1.75rem; color:var(--mm-green);"></i>
+              <div class="fw-bold mt-2" style="font-size:.875rem;">Toda la mesa</div>
+              <div style="font-size:.75rem; color:var(--mm-text-muted);">Pago grupal</div>
+            </label>
+          </div>
+        </div>
+        <button class="btn btn-primary w-100 py-3" onclick="confirmarCuenta()">
+          <i class="bi bi-send me-2"></i>Confirmar solicitud
+        </button>
+        <button class="btn w-100 py-2 mt-2" style="background:var(--mm-cream-dark);" data-bs-dismiss="modal">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF = getCsrf();
+
+// Radio cards visual
+document.querySelectorAll('input[name="tipoCobro"]').forEach(input => {
+  input.closest('label').addEventListener('click', () => {
+    document.querySelectorAll('input[name="tipoCobro"]').forEach(i => i.closest('label').classList.remove('selected'));
+    input.closest('label').classList.add('selected');
+  });
+});
+document.querySelector('input[name="tipoCobro"][checked]')?.closest('label').classList.add('selected');
+
+function openBillModal() {
+  new bootstrap.Modal(document.getElementById('billModal')).show();
+}
+
+async function confirmarCuenta() {
+  const tipo = document.querySelector('input[name="tipoCobro"]:checked')?.value || 'individual';
+  const res = await fetch('{% url "cliente:solicitar_cuenta" %}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ tipo })
+  });
+  const data = await res.json();
+  if (data.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('billModal')).hide();
+    showToast('Solicitud enviada. Tu mesero se acercará pronto.', 'success');
+  }
+}
+
+async function solicitarAyuda() {
+  const res = await fetch('{% url "cliente:solicitar_ayuda" %}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: '{}'
+  });
+  const data = await res.json();
+  if (data.ok) showToast('Mesero notificado', 'success');
+}
+
+// Polling cada 5 s — actualiza badge, stepper y mensaje de estado
+let _ordersPolling = false;
+let _ordersLastTs  = 0;
+
+async function pollOrders() {
+  if (_ordersPolling) return;
+  if (document.visibilityState === 'hidden') return;
+  _ordersPolling = true;
+  try {
+    const res  = await fetch('{% url "cliente:estado_pedidos" %}');
+    const data = await res.json();
+    const serverTs = data.ts || Date.now();
+    if (serverTs < _ordersLastTs) return;
+    _ordersLastTs = serverTs;
+    if (!data.ok) return;
+
+    data.pedidos.forEach(p => {
+      const card = document.getElementById(`order-${p.id}`);
+      if (!card) return;
+
+      // 1) Badge de estado
+      const badge = card.querySelector('.order-status-badge');
+      if (badge) {
+        badge.className = `order-status-badge status-${p.estado}`;
+        badge.textContent = p.estado_display;
+      }
+
+      // 2) Stepper de progreso
+      const dots  = card.querySelectorAll('.step-dot');
+      const lines = card.querySelectorAll('.step-line');
+      const estado = p.estado;
+      if (dots.length === 3 && lines.length === 2) {
+        if (estado === 'cancelado') {
+          dots.forEach(d => d.classList.remove('done','current'));
+          lines.forEach(l => l.classList.remove('done'));
+        } else {
+          dots[0].classList.toggle('done',    ['preparando','listo','entregado'].includes(estado));
+          dots[0].classList.toggle('current', estado === 'recibido');
+          lines[0].classList.toggle('done',   ['preparando','listo','entregado'].includes(estado));
+          dots[1].classList.toggle('done',    ['listo','entregado'].includes(estado));
+          dots[1].classList.toggle('current', estado === 'preparando');
+          lines[1].classList.toggle('done',   ['listo','entregado'].includes(estado));
+          dots[2].classList.toggle('done',    estado === 'entregado');
+          dots[2].classList.toggle('current', estado === 'listo');
+        }
+      }
+
+      // 3) Mensaje animado — buscar o crear, nunca duplicar
+      let msgEl = card.querySelector('.estado-msg');
+      if (!msgEl) {
+        msgEl = document.createElement('div');
+        msgEl.className = 'estado-msg mt-2 d-flex align-items-center gap-2';
+        const itemsDiv = card.querySelector('.mt-2');
+        if (itemsDiv) itemsDiv.after(msgEl); else card.appendChild(msgEl);
+      }
+      if (estado === 'preparando') {
+        msgEl.style.cssText = 'font-size:.8rem;color:var(--mm-warning);';
+        msgEl.innerHTML = '<span class="spinner-grow spinner-grow-sm" role="status" style="width:.5rem;height:.5rem;background:var(--mm-warning);"></span> En preparación…';
+      } else if (estado === 'listo') {
+        msgEl.style.cssText = 'font-size:.8rem;color:var(--mm-success);';
+        msgEl.innerHTML = '<i class="bi bi-check-circle-fill"></i> ¡Listo! Tu mesero lo llevará pronto';
+      } else {
+        msgEl.innerHTML = '';
+      }
+    });
+  } catch(e) { console.warn('pollOrders error:', e); }
+  finally { _ordersPolling = false; }
+}
+
+document.addEventListener('DOMContentLoaded', () => pollOrders());
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') pollOrders();
+});
+setInterval(pollOrders, 5000);
+</script>
+{% endblock %}

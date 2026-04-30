@@ -3,15 +3,13 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key-change-in-production')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+# FIX: DEBUG default False (era 'True')
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0').split(',')
 
-# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -20,19 +18,20 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    # Nuestras apps
-    'accounts',
-    'catalogs',
-    'menu',
-    'mesas',
-    'pedidos',
-    'auditoria',
-    'cliente',
-    'mesero',
-    'cocina',
-    'gerente',
+    # FIX: rutas actualizadas a apps.*
+    'apps.accounts',
+    'apps.catalogs',
+    'apps.menu',
+    'apps.mesas',
+    'apps.pedidos',
+    'apps.auditoria',
+    'apps.cliente',
+    'apps.mesero',
+    'apps.cocina',
+    'apps.gerente',
 ]
 
+# FIX: apunta a apps.accounts
 AUTH_USER_MODEL = 'accounts.Empleado'
 
 MIDDLEWARE = [
@@ -43,7 +42,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'cliente.middleware.ClienteSessionMiddleware',  # debe ir después de SessionMiddleware
+    # FIX: ruta actualizada a apps.cliente
+    'apps.cliente.middleware.ClienteSessionMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -66,7 +66,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
@@ -78,7 +77,6 @@ DATABASES = {
     }
 }
 
-# Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -86,18 +84,16 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-# Internationalization
 LANGUAGE_CODE = 'es-mx'
 TIME_ZONE = 'America/Mexico_City'
 USE_I18N = True
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = 'static/'
+# FIX: STATIC_URL con slashes correctas
+STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Media files (uploads)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 

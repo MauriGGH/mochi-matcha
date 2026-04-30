@@ -40,9 +40,11 @@
 ---
 
 ## 🏗️ Arquitectura
+
+```
       ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐
       │ 📱 Cliente │ │ 🧑 Mesero  │ │ 🍳 Cocina  │ │ 💼 Gerente │
-      │   (móvil)  │    (tablet)  │ │     KDS    │ │   (admin)  │
+      │   (móvil)  │ │  (tablet)  │ │     KDS    │ │   (admin)  │
       └─────┬──────┘ └─────┬──────┘ └─────┬──────┘ └─────┬──────┘
             │              │              │              │
             └──────────────┴──────────────┴──────────────┘
@@ -55,6 +57,7 @@
                         ┌───────────▼───────────┐
                         │     MySQL / MariaDB   │
                         └───────────────────────┘
+```
 
 **Frontend:** Django Templates + Bootstrap 5 — diseño responsive, polling con JavaScript vanilla  
 **Backend:** Django 5 (Python 3.11) — autenticación dual (clientes vía cookie, staff vía sesión Django)  
@@ -116,11 +119,115 @@
 
 ---
 
+## 🧪 Rutas para Testing Manual
+
+### 🔓 Públicas (sin login)
+
+| URL | Descripción |
+|-----|-------------|
+| `/` | Redirige a `/bienvenida/` |
+| `/bienvenida/` | Pantalla inicial para ingresar PIN o crear sesión |
+| `/bienvenida/crear/<mesa_id>/` | Crear nueva sesión en una mesa |
+| `/bienvenida/recuperar/<mesa_id>/` | Recuperar sesión existente con PIN |
+| `/bienvenida/pin/` | Muestra el PIN de la sesión actual |
+| `/bienvenida/estado/<mesa_id>/` | (JSON) Estado de mesa (incluye PIN y sesiones activas) |
+| `/accounts/login/` | Login genérico (staff) |
+| `/admin/` | Panel de administración de Django |
+
+### 🧑‍💻 Cliente (móvil)
+
+| URL | Descripción |
+|-----|-------------|
+| `/menu/` | Menú digital |
+| `/carrito/` | Ver carrito actual |
+| `/carrito/agregar/` | POST para agregar producto |
+| `/carrito/actualizar/` | POST para modificar cantidad |
+| `/carrito/eliminar/` | POST para quitar ítem |
+| `/carrito/limpiar/` | POST para vaciar carrito |
+| `/carrito/confirmar/` | POST para enviar pedido a cocina |
+| `/pedidos/` | Ver pedidos activos de la sesión |
+| `/pedidos/estado/` | (JSON) Estado de pedidos |
+| `/pedidos/ayuda/` | POST para llamar al mesero |
+| `/pedidos/cuenta/` | POST para pedir la cuenta |
+
+### 🧑‍🍳 Mesero (requiere login)
+
+| URL | Descripción |
+|-----|-------------|
+| `/mesero/login/` | Login de mesero |
+| `/mesero/logout/` | Cerrar sesión |
+| `/mesero/mapa/` | Mapa de mesas (vista principal) |
+| `/mesero/mapa/estado/` | (JSON) Estado de todas las mesas |
+| `/mesero/mapa/<mesa_id>/` | Detalle de una mesa |
+| `/mesero/pedidos-listos/` | Pedidos listos para entregar |
+| `/mesero/pedidos/entregar/` | POST para marcar pedido como entregado |
+| `/mesero/sesion/cerrar/` | POST para cerrar una sesión de cliente |
+| `/mesero/mesa/cerrar/` | POST para cerrar mesa completa |
+| `/mesero/asistido/` | Tomar pedido asistido |
+| `/mesero/asistido/confirmar/` | POST para confirmar pedido asistido |
+| `/mesero/alertas/` | Alertas de ayuda y solicitudes de cuenta |
+| `/mesero/cuentas/` | Solicitudes de pago pendientes |
+| `/mesero/pago/` | Vista de procesamiento de pago |
+| `/mesero/pago/procesar/` | POST para marcar pago como realizado |
+| `/mesero/mesas/` | Alias de `/mesero/mapa/` |
+| `/mesero/productos/json/` | (JSON) Lista de productos para pedido asistido |
+
+### 🍳 Cocina (requiere login)
+
+| URL | Descripción |
+|-----|-------------|
+| `/cocina/login/` | Login de cocina |
+| `/cocina/logout/` | Cerrar sesión |
+| `/cocina/kds/` | Pantalla KDS |
+| `/cocina/pedidos-json/` | (JSON) Pedidos pendientes y en preparación |
+| `/cocina/marcar-listo/` | POST para marcar pedido como listo |
+
+### 💼 Gerente (requiere login)
+
+| URL | Descripción |
+|-----|-------------|
+| `/gerente/login/` | Login de gerente |
+| `/gerente/logout/` | Cerrar sesión |
+| `/gerente/dashboard/` | Panel principal |
+| `/gerente/floor-plan/` | Plano de mesas (solo lectura) |
+| `/gerente/floor-plan/estado/` | (JSON) Estado de mesas |
+| `/gerente/floor-plan/mesa/<mesa_id>/` | Detalle de mesa |
+| `/gerente/pedidos/cancelar/` | POST para cancelar un pedido |
+| `/gerente/menu/` | Gestión de productos |
+| `/gerente/menu/productos/` | (alias) Gestión de productos |
+| `/gerente/menu/productos/nuevo/` | Nuevo producto |
+| `/gerente/menu/productos/<id>/editar/` | Editar producto |
+| `/gerente/menu/productos/<id>/eliminar/` | POST para eliminar producto |
+| `/gerente/menu/categorias/` | Gestión de categorías |
+| `/gerente/menu/categorias/<id>/eliminar/` | POST para eliminar categoría |
+| `/gerente/menu/modificadores/` | Gestión de modificadores |
+| `/gerente/menu/modificadores/crear/` | POST para crear modificador |
+| `/gerente/menu/modificadores/<id>/eliminar/` | POST para eliminar modificador |
+| `/gerente/menu/promociones/` | Gestión de promociones |
+| `/gerente/menu/promociones/<id>/toggle/` | POST para activar/desactivar promoción |
+| `/gerente/menu/promociones/<id>/eliminar/` | POST para eliminar promoción |
+| `/gerente/mesas/` | Gestión de mesas |
+| `/gerente/mesas/crud/` | CRUD de mesas (tabla/API) |
+| `/gerente/mesas/<id>/eliminar/` | POST para eliminar mesa |
+| `/gerente/mesas/<mesa_id>/asignar/` | POST para asignar mesero |
+| `/gerente/empleados/` | Gestión de empleados |
+| `/gerente/empleados/nuevo/` | Nuevo empleado |
+| `/gerente/empleados/<id>/toggle/` | POST para activar/desactivar empleado |
+| `/gerente/empleados/<id>/editar/` | Editar empleado |
+| `/gerente/reportes/` | Reportes de ventas |
+| `/gerente/auditoria/` | Registro de auditoría |
+| `/gerente/stats/` | (JSON) Estadísticas para reportes |
+| `/gerente/configuracion/` | Configuración general |
+| `/gerente/menu/mesas/` | Alias de `/gerente/mesas/crud/` |
+| `/gerente/menu/empleados/` | Alias de `/gerente/empleados/` |
+
+---
+
 ## 🗃️ Modelo de datos
 
 | Tabla | Descripción |
 |---|---|
-| `Empleado` | Personal del sistema con roles y credenciales (hereda de AbstractBaseUser) |
+| `Empleado` | Personal del sistema con roles y credenciales (hereda de `AbstractBaseUser`) |
 | `Mesa` | Mesas físicas, QR, PIN dinámico y estado |
 | `SesionCliente` | Sesión de cada comensal (alias, token, estado) |
 | `Producto` / `Categoria` | Catálogo del menú |
@@ -149,22 +256,33 @@
 ---
 
 ## 📁 Estructura del proyecto
-      mochi-matcha/
-      ├── config/ # Configuración de Django (settings, urls raíz)
-      ├── accounts/ # Modelo Empleado, autenticación, decoradores
-      ├── catalogs/ # Catálogos simples (ModalidadIngreso, MetodoPago, etc.)
-      ├── menu/ # Productos, Categorías, Modificadores, Promociones
-      ├── mesas/ # Modelos Mesa y SesionCliente
-      ├── pedidos/ # Pedido, DetallePedido, SolicitudPago
-      ├── auditoria/ # Registro de acciones críticas
-      ├── cliente/ # Vistas y templates del módulo cliente (móvil)
-      ├── mesero/ # Vistas y templates del módulo mesero
-      ├── cocina/ # Vistas y templates del módulo cocina (KDS)
-      ├── gerente/ # Vistas y templates del módulo gerente/admin
-      ├── static/ # CSS, JS globales (mochi.css, staff.css, cliente.css)
-      ├── templates/ # Plantillas base (base/cliente_base.html, staff_base.html, login.html)
-      └── media/ # Imágenes subidas (productos, QR)
 
+```
+mochi-matcha/
+├── apps/                         # Todas las aplicaciones Django
+│   ├── accounts/                 # Modelo Empleado, autenticación, decoradores
+│   ├── auditoria/                # Registro de acciones críticas
+│   ├── catalogs/                 # Catálogos simples (ModalidadIngreso, MetodoPago, etc.)
+│   ├── cliente/                  # Vistas y templates del módulo cliente (móvil)
+│   ├── cocina/                   # Vistas y templates del módulo cocina (KDS)
+│   ├── gerente/                  # Vistas y templates del módulo gerente/admin
+│   ├── menu/                     # Productos, Categorías, Modificadores, Promociones
+│   ├── mesas/                    # Modelos Mesa y SesionCliente
+│   ├── mesero/                   # Vistas y templates del módulo mesero
+│   └── pedidos/                  # Pedido, DetallePedido, SolicitudPago
+├── config/                       # Configuración de Django (settings, urls raíz, wsgi, asgi)
+├── static/                       # CSS y JS globales (mochi.css, staff.css, cliente.css)
+├── templates/                    # Plantillas base (base/*.html)
+│   └── base/
+│       ├── cliente_base.html
+│       ├── login.html
+│       └── staff_base.html
+├── docker-compose.yml
+├── Dockerfile
+├── manage.py
+├── requirements.txt
+└── README.md
+```
 
 ---
 

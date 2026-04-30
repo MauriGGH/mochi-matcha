@@ -39,4 +39,3 @@ class SesionClienteAdmin(admin.ModelAdmin):
     list_filter = ['estado', 'modalidad_ingreso']
     search_fields = ['alias', 'mesa__numero_mesa']
     readonly_fields = ['token_cookie', 'fecha_inicio']
-    
