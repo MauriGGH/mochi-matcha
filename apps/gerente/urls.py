@@ -11,6 +11,7 @@ urlpatterns = [
     path('floor-plan/estado/', views.mesas_estado, name='mesas_estado'),
     path('floor-plan/mesa/<int:mesa_id>/', views.detalle_mesa, name='detalle_mesa'),
     path('pedidos/cancelar/', views.cancelar_pedido, name='cancelar_pedido'),
+    path('cuentas/cancelar/', views.cancelar_solicitud_pago, name='cancelar_solicitud_pago'),
     # Productos / menú
     path('menu/', views.productos, name='productos'),
     path('menu/productos/', views.productos, name='productos'),
@@ -21,13 +22,20 @@ urlpatterns = [
     path('menu/categorias/<int:id>/eliminar/', views.categoria_eliminar, name='categoria_eliminar'),
     path('menu/modificadores/', views.modificadores, name='modificadores'),
     path('menu/modificadores/crear/', views.modificador_crear, name='modificador_crear'),
+    path('menu/modificadores/clonar/', views.modificador_clonar, name='modificador_clonar'),
+    path('menu/modificadores/<int:id>/editar/', views.modificador_editar, name='modificador_editar'),
     path('menu/modificadores/<int:id>/eliminar/', views.modificador_eliminar, name='modificador_eliminar'),
+    path('menu/modificadores/<int:id>/plantilla/', views.modificador_toggle_plantilla, name='modificador_toggle_plantilla'),
     path('menu/promociones/', views.promociones, name='promociones'),
     path('menu/promociones/<int:id>/toggle/', views.promocion_toggle, name='promocion_toggle'),
     path('menu/promociones/<int:id>/eliminar/', views.promocion_eliminar, name='promocion_eliminar'),
+    path('menu/promociones/<int:id>/editar/', views.promocion_editar, name='promocion_editar'),  # ← NUEVA
     # Mesas
     path('mesas/', views.mesas, name='mesas'),
     path('mesas/crud/', views.mesas_crud, name='mesas_crud'),
+    path('mesas/ubicacion/crear/', views.ubicacion_crear, name='ubicacion_crear'),
+    path('mesas/ubicacion/<int:id>/editar/', views.ubicacion_editar, name='ubicacion_editar'),
+    path('mesas/ubicacion/<int:id>/eliminar/', views.ubicacion_eliminar, name='ubicacion_eliminar'),
     path('mesas/<int:id>/eliminar/', views.mesa_eliminar, name='mesa_eliminar'),
     path('mesas/<int:mesa_id>/asignar/', views.asignar_mesero, name='asignar_mesero'),
     # Empleados
@@ -37,6 +45,8 @@ urlpatterns = [
     path('empleados/<int:id>/editar/', views.empleado_editar, name='empleado_editar'),
     # Reportes
     path('reportes/', views.reportes, name='reportes'),
+    path('reportes/exportar/', views.reporte_exportar, name='reporte_exportar'),
+    path('reportes/quincenales/', views.reportes_quincenales, name='reportes_quincenales'),
     path('auditoria/', views.auditoria, name='auditoria'),
     path('stats/', views.stats_json, name='stats_json'),
     # Configuración
