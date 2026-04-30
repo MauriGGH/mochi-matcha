@@ -17,7 +17,7 @@ class Pedido(models.Model):
     fecha_hora_ingreso = models.DateTimeField(auto_now_add=True)
     fecha_hora_entrega = models.DateTimeField(null=True, blank=True)
     estado = models.CharField(max_length=10, choices=ESTADOS, default="recibido")
-    motivo_cancelacion = models.TextField(null=True, blank=True)
+    motivo_cancelacion = models.CharField(max_length=500, blank=True, default="")
     # PROTECT: un pedido es un registro histórico y no debe borrarse en cascada
     sesion = models.ForeignKey(
         SesionCliente, on_delete=models.PROTECT, related_name="pedidos"
@@ -72,6 +72,11 @@ class DetallePedido(models.Model):
 class DetalleModificador(models.Model):
     cantidad = models.PositiveIntegerField(default=1)
     precio_extra_aplicado = models.DecimalField(max_digits=10, decimal_places=2)
+    # Snapshot del nombre en el momento del pedido (histórico inmutable)
+    nombre_opcion_historico = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Nombre de la opción en el momento en que se creó el pedido."
+    )
     # CASCADE: pertenece al detalle del pedido
     detalle = models.ForeignKey(
         DetallePedido, on_delete=models.CASCADE, related_name="modificadores"
@@ -81,12 +86,17 @@ class DetalleModificador(models.Model):
         OpcionModificador, on_delete=models.PROTECT, related_name="usos"
     )
 
+    @property
+    def nombre_display(self):
+        """Devuelve el nombre histórico si existe, o el nombre actual de la opción."""
+        return self.nombre_opcion_historico or self.opcion.nombre_opcion
+
     class Meta:
         verbose_name = "Modificador aplicado"
         verbose_name_plural = "Modificadores aplicados"
 
     def __str__(self):
-        return f"{self.opcion} en detalle #{self.detalle_id}"
+        return f"{self.nombre_display} en detalle #{self.detalle_id}"
 
 
 class SolicitudPago(models.Model):

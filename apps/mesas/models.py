@@ -5,6 +5,24 @@ import qrcode
 from io import BytesIO
 import base64
 from django.urls import reverse
+from django.conf import settings
+
+
+class UbicacionMesa(models.Model):
+    nombre = models.CharField(max_length=60, unique=True)
+
+    class Meta:
+        verbose_name = "Ubicación de mesa"
+        verbose_name_plural = "Ubicaciones de mesa"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+    def save(self, *args, **kwargs):
+        if self.nombre:
+            self.nombre = self.nombre.upper()
+        super().save(*args, **kwargs)
 
 
 class Mesa(models.Model):
@@ -12,7 +30,10 @@ class Mesa(models.Model):
 
     numero_mesa = models.IntegerField(unique=True)
     capacidad = models.IntegerField()
-    ubicacion = models.CharField(max_length=50, null=True, blank=True)
+    ubicacion = models.ForeignKey(
+        UbicacionMesa, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="mesas"
+    )
     codigo_qr = models.CharField(max_length=255, unique=True)
     pin_actual = models.CharField(max_length=60, null=True, blank=True)
     estado = models.CharField(max_length=10, choices=ESTADOS, default="libre")
@@ -45,8 +66,7 @@ class Mesa(models.Model):
             box_size=10,
             border=2,
         )
-        # Cambia localhost por tu dominio en producción
-        base_url = "http://localhost:8000"
+        base_url = getattr(settings, "SITE_BASE_URL", "http://localhost:8000")
         full_url = base_url + self.get_qr_url()
         qr.add_data(full_url)
         qr.make(fit=True)
@@ -85,3 +105,29 @@ class SesionCliente(models.Model):
 
     def __str__(self):
         return f"{self.alias} @ {self.mesa}"
+
+
+class AlertaMesero(models.Model):
+    TIPOS = [
+        ("ayuda", "Ayuda"),
+        ("cuenta", "Solicitud de cuenta"),
+        ("personalizado", "Personalizado"),
+    ]
+
+    mesa = models.ForeignKey(Mesa, on_delete=models.CASCADE, related_name="alertas")
+    sesion = models.ForeignKey(
+        SesionCliente, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="alertas"
+    )
+    tipo = models.CharField(max_length=15, choices=TIPOS, default="ayuda")
+    mensaje = models.TextField(blank=True, default="")
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    atendida = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "Alerta de mesero"
+        verbose_name_plural = "Alertas de mesero"
+        ordering = ["-fecha_creacion"]
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} — Mesa {self.mesa.numero_mesa}"

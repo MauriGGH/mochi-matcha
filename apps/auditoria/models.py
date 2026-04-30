@@ -1,7 +1,7 @@
 from django.db import models
 from apps.accounts.models import Empleado
 from apps.mesas.models import Mesa
-from apps.pedidos.models import Pedido
+from apps.pedidos.models import Pedido, SolicitudPago
 
 
 class Auditoria(models.Model):
@@ -20,6 +20,11 @@ class Auditoria(models.Model):
     # SET_NULL: si el pedido es eliminado (no debería), la auditoría se conserva
     pedido = models.ForeignKey(
         Pedido, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="auditorias"
+    )
+    # SET_NULL: referencia a la solicitud de pago involucrada (cancelaciones, cobros)
+    solicitud_pago = models.ForeignKey(
+        SolicitudPago, null=True, blank=True, on_delete=models.SET_NULL,
         related_name="auditorias"
     )
 
