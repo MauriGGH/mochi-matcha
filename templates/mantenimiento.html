@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mochi Matcha — En mantenimiento</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #F8F5F0; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; }
+  .card { background: #fff; border-radius: 16px; padding: 3rem 2.5rem; text-align: center; max-width: 420px; box-shadow: 0 8px 32px rgba(0,0,0,.08); }
+  .emoji { font-size: 4rem; margin-bottom: 1.5rem; }
+  h1 { font-size: 1.5rem; font-weight: 700; color: #2D6A4F; margin-bottom: .75rem; }
+  p { color: #666; font-size: .95rem; line-height: 1.6; }
+  .msg { margin-top: 1.5rem; background: #F0FAF4; border-radius: 8px; padding: 1rem; color: #2D6A4F; font-size: .9rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="emoji">🍵</div>
+  <h1>Mochi Matcha</h1>
+  <p>Estamos realizando tareas de mantenimiento. Volveremos en breve.</p>
+  {% if mensaje %}
+  <div class="msg">{{ mensaje }}</div>
+  {% endif %}
+</div>
+</body>
+</html>
