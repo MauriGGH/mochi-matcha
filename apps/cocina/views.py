@@ -6,9 +6,11 @@ from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
+from django.utils import timezone
 
 from apps.accounts.decorators import cocina_requerido
 from apps.pedidos.models import Pedido
+from apps.gerente.models import Configuracion
 
 
 def login_cocina(request):
@@ -63,6 +65,13 @@ def kds(request):
 
     pedidos = _filtrar_pedidos_por_area(qs, area)
 
+    # Annotate each pedido with only the detalles relevant to this area
+    for pedido in pedidos:
+        pedido.detalles_filtrados = [
+            d for d in pedido.detalles.all()
+            if d.producto.categoria.area in (area, "ambos")
+        ]
+
     # Pedidos listos para entrega (panel derecho)
     qs_listos = Pedido.objects.filter(
         estado="listo"
@@ -77,6 +86,8 @@ def kds(request):
         "area": area,
         "pendientes_count": pedidos.count(),
         "listos_count": pedidos_listos.count(),
+        "semaforo_yellow": int(Configuracion.objects.filter(clave="semaforo_yellow").values_list("valor", flat=True).first() or 8),
+        "semaforo_red": int(Configuracion.objects.filter(clave="semaforo_red").values_list("valor", flat=True).first() or 15),
     })
 
 
@@ -99,13 +110,24 @@ def pedidos_json(request):
     ).select_related("sesion__mesa").order_by("fecha_hora_ingreso")
     listos = _filtrar_pedidos_por_area(qs_listos, area)
 
-    def serializar(p):
+    def serializar(p, area_filter):
         return {
             "id": p.pk,
             "estado": p.estado,
             "mesa": p.sesion.mesa.numero_mesa,
             "alias": p.sesion.alias,
             "fecha": p.fecha_hora_ingreso.isoformat(),
+            "detalles_filtrados": [
+                {
+                    "nombre": d.producto.nombre,
+                    "cantidad": d.cantidad,
+                    "notas": d.notas or "",
+                    "modificadores": [m.opcion.nombre_opcion for m in d.modificadores.all()],
+                }
+                for d in p.detalles.all()
+                if d.producto.categoria.area in (area_filter, "ambos")
+            ],
+            # legacy alias kept for backward compat with old buildCard
             "items": [
                 {
                     "nombre": d.producto.nombre,
@@ -114,13 +136,15 @@ def pedidos_json(request):
                     "modificadores": [m.opcion.nombre_opcion for m in d.modificadores.all()],
                 }
                 for d in p.detalles.all()
+                if d.producto.categoria.area in (area_filter, "ambos")
             ],
         }
 
     return JsonResponse({
         "ok": True,
-        "pendientes": [serializar(p) for p in pedidos],
-        "listos": [serializar(p) for p in listos],
+        "ts": int(timezone.now().timestamp() * 1000),
+        "pendientes": [serializar(p, area) for p in pedidos],
+        "listos": [serializar(p, area) for p in listos],
     })
 
 

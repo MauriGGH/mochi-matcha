@@ -7,6 +7,7 @@ import random
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
+from django.utils import timezone
 
 from apps.accounts.decorators import sesion_cliente_requerida
 from apps.mesas.models import Mesa, SesionCliente
@@ -161,8 +162,13 @@ def recuperar_sesion(request, mesa_id):
 @sesion_cliente_requerida
 def menu(request):
     from django.utils import timezone
+    from django.db.models import Prefetch
+    from apps.menu.models import OpcionModificador as _Opcion
     categorias = list(Categoria.objects.prefetch_related(
-        "productos__grupos_modificadores__opciones"
+        Prefetch(
+            "productos__grupos_modificadores__opciones",
+            queryset=_Opcion.objects.filter(activo=True),
+        )
     ).all())
     for cat in categorias:
         cat.productos_disponibles = [p for p in cat.productos.all() if p.disponible]
@@ -187,13 +193,25 @@ def menu(request):
 
 @sesion_cliente_requerida
 def carrito(request):
+    import json as _json
     items = _get_carrito(request)
     total = sum(item.get("subtotal", 0) for item in items)
     sesion = request.sesion_cliente
+    carrito_json = _json.dumps([
+        {
+            "producto_id": i.get("producto_id"),
+            "cantidad": i.get("cantidad", 1),
+            "subtotal": float(i.get("subtotal", 0)),
+            "modificadores": i.get("modificadores", []),
+            "notas": i.get("notas", ""),
+        }
+        for i in items
+    ])
     return render(request, "cliente/carrito.html", {
         "carrito": items, "total": total,
         "carrito_count": len(items), "sesion": sesion,
         "mesa": sesion.mesa, "pin_mesa": sesion.mesa.pin_actual,
+        "carrito_json": carrito_json,
     })
 
 
@@ -280,28 +298,35 @@ def limpiar_carrito(request):
 @sesion_cliente_requerida
 def confirmar_pedido(request):
     from django.db import transaction
+    from apps.pedidos.utils import aplicar_promociones
     items = _get_carrito(request)
     if not items:
         return JsonResponse({"ok": False, "error": "El carrito está vacío"}, status=400)
     sesion = request.sesion_cliente
     from apps.menu.models import OpcionModificador
+
+    # Aplicar promociones antes de persistir
+    items, promos_aplicadas = aplicar_promociones(items, sesion)
+
     with transaction.atomic():
-      pedido = Pedido.objects.create(sesion=sesion, modalidad=sesion.modalidad_ingreso)
-    for item in items:
-        producto = get_object_or_404(Producto, pk=item["producto_id"])
-        detalle = DetallePedido.objects.create(
-            pedido=pedido, producto=producto, cantidad=item["cantidad"],
-            notas=item.get("notas", ""), subtotal_calculado=item["subtotal"],
-        )
-        for op_data in item.get("modificadores", []):
-            try:
-                opcion = OpcionModificador.objects.get(pk=op_data["id"])
-                DetalleModificador.objects.create(
-                    detalle=detalle, opcion=opcion,
-                    precio_extra_aplicado=op_data["extra"],
-                )
-            except OpcionModificador.DoesNotExist:
-                pass
+        pedido = Pedido.objects.create(sesion=sesion, modalidad=sesion.modalidad_ingreso)
+        for item in items:
+            producto = get_object_or_404(Producto, pk=item["producto_id"])
+            detalle = DetallePedido.objects.create(
+                pedido=pedido, producto=producto, cantidad=item["cantidad"],
+                notas=item.get("notas", ""), subtotal_calculado=item["subtotal"],
+                promocion_id=item.get("promocion_id"),
+            )
+            for op_data in item.get("modificadores", []):
+                try:
+                    opcion = OpcionModificador.objects.get(pk=op_data["id"])
+                    DetalleModificador.objects.create(
+                        detalle=detalle, opcion=opcion,
+                        precio_extra_aplicado=op_data["extra"],
+                        nombre_opcion_historico=opcion.nombre_opcion,  # snapshot
+                    )
+                except OpcionModificador.DoesNotExist:
+                    pass
     _save_carrito(request, [])
     return JsonResponse({"ok": True, "pedido_id": pedido.pk})
 
@@ -336,18 +361,35 @@ def estado_pedidos(request):
             "fecha": p.fecha_hora_ingreso.strftime("%H:%M"),
             "items": [{"nombre": d.producto.nombre, "cantidad": d.cantidad} for d in p.detalles.all()],
         })
-    return JsonResponse({"ok": True, "pedidos": data})
+    return JsonResponse({"ok": True, "ts": int(timezone.now().timestamp() * 1000), "pedidos": data})
 
 
 @require_POST
 @sesion_cliente_requerida
 def solicitar_ayuda(request):
+    if not request.sesion_cliente:
+        return JsonResponse({"ok": False, "error": "Sesión no válida"}, status=401)
+    sesion = request.sesion_cliente
+    from apps.mesas.models import AlertaMesero
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        data = {}
+    mensaje = data.get("mensaje", "El cliente solicita atención.")
+    AlertaMesero.objects.create(
+        mesa=sesion.mesa,
+        sesion=sesion,
+        tipo="ayuda",
+        mensaje=mensaje,
+    )
     return JsonResponse({"ok": True, "mensaje": "Se ha notificado a tu mesero."})
 
 
 @require_POST
 @sesion_cliente_requerida
 def solicitar_cuenta(request):
+    if not request.sesion_cliente:
+        return JsonResponse({"ok": False, "error": "Sesión no válida"}, status=401)
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
@@ -387,3 +429,58 @@ def solicitar_cuenta(request):
             }
         )
     return JsonResponse({"ok": True, "mensaje": "Tu mesero se acercará en breve."})
+
+
+# ─── Calcular descuentos del carrito (informativo, no autoritativo) ───────────
+
+@require_POST
+def calcular_carrito(request):
+    """
+    POST JSON {items: [{producto_id, cantidad, subtotal, modificadores, notas}]}
+    Devuelve estimación de descuentos con promociones activas.
+    El backend es la fuente de verdad al confirmar; esto es solo informativo.
+    """
+    sesion = request.session.get("sesion_id")
+    sesion_obj = None
+    if sesion:
+        from apps.mesas.models import SesionCliente as SC
+        sesion_obj = SC.objects.filter(pk=sesion, estado="activa").first()
+
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({"ok": False, "error": "JSON inválido"}, status=400)
+
+    items = data.get("items", [])
+    if not items:
+        return JsonResponse({"ok": True, "subtotal": 0, "descuento": 0, "total": 0, "promociones": []})
+
+    from apps.pedidos.utils import aplicar_promociones
+    from decimal import Decimal
+
+    items_calc = []
+    for item in items:
+        items_calc.append({
+            "producto_id": item.get("producto_id"),
+            "cantidad": item.get("cantidad", 1),
+            "subtotal": float(item.get("subtotal", 0)),
+            "modificadores": item.get("modificadores", []),
+            "notas": item.get("notas", ""),
+        })
+
+    subtotal_original = sum(Decimal(str(i["subtotal"])) for i in items_calc)
+    items_con_promo, promos = aplicar_promociones(items_calc, sesion_obj)
+    total_con_promo = sum(Decimal(str(i["subtotal"])) for i in items_con_promo)
+    descuento = subtotal_original - total_con_promo
+
+    # Mapa producto_id → precio con descuento para mostrar en UI
+    precios_map = {i["producto_id"]: float(Decimal(str(i["subtotal"]))) for i in items_con_promo}
+
+    return JsonResponse({
+        "ok": True,
+        "subtotal": float(subtotal_original),
+        "descuento": float(descuento),
+        "total": float(total_con_promo),
+        "promociones": [{"id": p.pk, "titulo": p.titulo} for p in promos],
+        "precios_map": precios_map,
+    })
