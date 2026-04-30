@@ -24,14 +24,50 @@
 
 <!-- Promo Banner -->
 {% if promo_banner %}
-<div class="mx-3 mt-3 px-3 py-3 rounded-3 d-flex align-items-center gap-2"
-     style="background:var(--mm-green); color:#fff;">
-  <span style="background:rgba(255,255,255,.2); border-radius:6px; padding:.2rem .5rem; font-size:.7rem; font-weight:700; white-space:nowrap;">PROMO</span>
-  <div>
-    <div class="fw-bold" style="font-size:.95rem;">{{ promo_banner.titulo }}</div>
-    <div style="font-size:.78rem; opacity:.85;">Válida hasta {{ promo_banner.fecha_fin|date:"d/m" }}</div>
+<div class="mx-3 mt-3 rounded-3" style="background:var(--mm-green); color:#fff; overflow:hidden;">
+  <button onclick="togglePromoBanner()" style="width:100%;background:none;border:none;color:#fff;text-align:left;padding:.75rem 1rem;display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+    <span style="background:rgba(255,255,255,.2); border-radius:6px; padding:.2rem .5rem; font-size:.7rem; font-weight:700; white-space:nowrap;">PROMO</span>
+    <div style="flex:1;">
+      <div class="fw-bold" style="font-size:.95rem;">{{ promo_banner.titulo }}</div>
+      <div style="font-size:.78rem; opacity:.85;">
+        {% if promo_banner.tipo_descuento %}
+          {% if promo_banner.tipo_descuento.descripcion == "Porcentaje" and promo_banner.valor_descuento %}{{ promo_banner.valor_descuento|floatformat:0 }}% off
+          {% elif promo_banner.tipo_descuento.descripcion == "2x1" %}2×1
+          {% elif promo_banner.tipo_descuento.descripcion == "Monto fijo" and promo_banner.valor_descuento %}${{ promo_banner.valor_descuento|floatformat:0 }} off
+          {% elif promo_banner.tipo_descuento.descripcion == "Lleva X paga Y" %}Promoción especial
+          {% elif promo_banner.tipo_descuento.descripcion == "Combo precio fijo" and promo_banner.valor_descuento %}Combo ${{ promo_banner.valor_descuento|floatformat:0 }}
+          {% else %}Descuento especial{% endif %} ·
+        {% endif %}
+        Válida hasta {{ promo_banner.fecha_fin|date:"d/m" }}
+      </div>
+    </div>
+    <i class="bi bi-chevron-down" id="promoBannerChevron" style="transition:transform .2s;font-size:.85rem;opacity:.8;"></i>
+  </button>
+  {% if promo_banner.imagen_url %}
+  <div style="width:100%; max-height:140px; overflow:hidden;">
+    <img src="{{ promo_banner.imagen_url }}" alt="{{ promo_banner.titulo }}"
+         style="width:100%; height:140px; object-fit:cover;"
+         onerror="this.parentElement.style.display='none'">
+  </div>
+  {% endif %}
+  <div id="promoBannerDetail" style="display:none; padding:0 1rem .9rem; font-size:.82rem; opacity:.92; border-top:1px solid rgba(255,255,255,.2);">
+    <div class="pt-2">
+      {% if promo_banner.tipo_descuento %}<div><strong>Tipo:</strong> {{ promo_banner.tipo_descuento.descripcion }}{% if promo_banner.valor_descuento %} — {{ promo_banner.valor_descuento }}{% if promo_banner.tipo_descuento.descripcion == "Porcentaje" %}%{% elif promo_banner.tipo_descuento.descripcion != "Lleva X paga Y" %}${% endif %}{% endif %}</div>{% endif %}
+      {% if promo_banner.cantidad_minima %}<div><strong>Cantidad mínima:</strong> {{ promo_banner.cantidad_minima }} productos</div>{% endif %}
+      {% if promo_banner.productos_aplicables.exists %}<div><strong>Aplica en:</strong> {% for p in promo_banner.productos_aplicables.all %}{{ p.nombre }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+      <div><strong>Vigencia:</strong> {{ promo_banner.fecha_inicio|date:"d/m/Y" }} al {{ promo_banner.fecha_fin|date:"d/m/Y" }}</div>
+    </div>
   </div>
 </div>
+<script>
+function togglePromoBanner() {
+  const d = document.getElementById('promoBannerDetail');
+  const ch = document.getElementById('promoBannerChevron');
+  const open = d.style.display === 'none';
+  d.style.display = open ? 'block' : 'none';
+  ch.style.transform = open ? 'rotate(180deg)' : 'rotate(0deg)';
+}
+</script>
 {% endif %}
 
 <!-- Category Tabs -->

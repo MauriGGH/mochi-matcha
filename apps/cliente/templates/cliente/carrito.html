@@ -62,10 +62,15 @@
     <span>Subtotal</span>
     <span id="subtotalDisplay">${{ total|floatformat:2 }}</span>
   </div>
+  <div id="descuentoRow" class="d-flex justify-content-between mb-1" style="font-size:.875rem; color:var(--mm-green); display:none !important;">
+    <span><i class="bi bi-tag-fill me-1"></i>Descuento</span>
+    <span id="descuentoDisplay">−$0.00</span>
+  </div>
   <div class="d-flex justify-content-between fw-bold" style="font-size:1.05rem;">
-    <span>Total</span>
+    <span>Total estimado</span>
     <span id="totalDisplay" style="color:var(--mm-green);">${{ total|floatformat:2 }}</span>
   </div>
+  <div id="promoInfo" style="font-size:.75rem; color:var(--mm-text-muted); margin-top:.35rem; display:none;"></div>
 </div>
 
 <!-- Actions -->
@@ -93,6 +98,36 @@
 {% block extra_scripts %}
 <script>
 const CSRF = getCsrf();
+
+// Calcular descuentos desde backend (informativo) al cargar la página
+document.addEventListener('DOMContentLoaded', () => calcularDescuentos());
+
+async function calcularDescuentos() {
+  try {
+    // Construir items desde los datos del template
+    const items = {{ carrito_json|safe }};
+    if (!items || !items.length) return;
+    const res = await fetch('{% url "cliente:calcular_carrito" %}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ items })
+    });
+    const d = await res.json();
+    if (!d.ok) return;
+    if (d.descuento > 0.001) {
+      document.getElementById('subtotalDisplay').textContent = '$' + d.subtotal.toFixed(2);
+      document.getElementById('totalDisplay').textContent    = '$' + d.total.toFixed(2);
+      const dr = document.getElementById('descuentoRow');
+      dr.style.display = 'flex';
+      document.getElementById('descuentoDisplay').textContent = '−$' + d.descuento.toFixed(2);
+      const pi = document.getElementById('promoInfo');
+      if (d.promociones && d.promociones.length) {
+        pi.textContent = '🏷️ ' + d.promociones.map(p=>p.titulo).join(', ');
+        pi.style.display = 'block';
+      }
+    }
+  } catch(e) { /* silencioso — no interrumpir la compra */ }
+}
 
 async function removeItem(index) {
   const res = await fetch('{% url "cliente:eliminar_carrito" %}', {

@@ -173,25 +173,79 @@ async function solicitarAyuda() {
   if (data.ok) showToast('Mesero notificado', 'success');
 }
 
-// Polling cada 5s
+// Polling cada 5 s — actualiza badge, stepper y mensaje de estado
+let _ordersPolling = false;
+let _ordersLastTs  = 0;
+
 async function pollOrders() {
+  if (_ordersPolling) return;
+  if (document.visibilityState === 'hidden') return;
+  _ordersPolling = true;
   try {
-    const res = await fetch('{% url "cliente:estado_pedidos" %}');
+    const res  = await fetch('{% url "cliente:estado_pedidos" %}');
     const data = await res.json();
-    if (data.ok) {
-      data.pedidos.forEach(p => {
-        const card = document.getElementById(`order-${p.id}`);
-        if (card) {
-          const badge = card.querySelector('.order-status-badge');
-          if (badge) {
-            badge.className = `order-status-badge status-${p.estado}`;
-            badge.textContent = p.estado_display;
-          }
+    const serverTs = data.ts || Date.now();
+    if (serverTs < _ordersLastTs) return;
+    _ordersLastTs = serverTs;
+    if (!data.ok) return;
+
+    data.pedidos.forEach(p => {
+      const card = document.getElementById(`order-${p.id}`);
+      if (!card) return;
+
+      // 1) Badge de estado
+      const badge = card.querySelector('.order-status-badge');
+      if (badge) {
+        badge.className = `order-status-badge status-${p.estado}`;
+        badge.textContent = p.estado_display;
+      }
+
+      // 2) Stepper de progreso
+      const dots  = card.querySelectorAll('.step-dot');
+      const lines = card.querySelectorAll('.step-line');
+      const estado = p.estado;
+      if (dots.length === 3 && lines.length === 2) {
+        if (estado === 'cancelado') {
+          dots.forEach(d => d.classList.remove('done','current'));
+          lines.forEach(l => l.classList.remove('done'));
+        } else {
+          dots[0].classList.toggle('done',    ['preparando','listo','entregado'].includes(estado));
+          dots[0].classList.toggle('current', estado === 'recibido');
+          lines[0].classList.toggle('done',   ['preparando','listo','entregado'].includes(estado));
+          dots[1].classList.toggle('done',    ['listo','entregado'].includes(estado));
+          dots[1].classList.toggle('current', estado === 'preparando');
+          lines[1].classList.toggle('done',   ['listo','entregado'].includes(estado));
+          dots[2].classList.toggle('done',    estado === 'entregado');
+          dots[2].classList.toggle('current', estado === 'listo');
         }
-      });
-    }
-  } catch(e) {}
+      }
+
+      // 3) Mensaje animado — buscar o crear, nunca duplicar
+      let msgEl = card.querySelector('.estado-msg');
+      if (!msgEl) {
+        msgEl = document.createElement('div');
+        msgEl.className = 'estado-msg mt-2 d-flex align-items-center gap-2';
+        const itemsDiv = card.querySelector('.mt-2');
+        if (itemsDiv) itemsDiv.after(msgEl); else card.appendChild(msgEl);
+      }
+      if (estado === 'preparando') {
+        msgEl.style.cssText = 'font-size:.8rem;color:var(--mm-warning);';
+        msgEl.innerHTML = '<span class="spinner-grow spinner-grow-sm" role="status" style="width:.5rem;height:.5rem;background:var(--mm-warning);"></span> En preparación…';
+      } else if (estado === 'listo') {
+        msgEl.style.cssText = 'font-size:.8rem;color:var(--mm-success);';
+        msgEl.innerHTML = '<i class="bi bi-check-circle-fill"></i> ¡Listo! Tu mesero lo llevará pronto';
+      } else {
+        msgEl.innerHTML = '';
+      }
+    });
+  } catch(e) { console.warn('pollOrders error:', e); }
+  finally { _ordersPolling = false; }
 }
+
+document.addEventListener('DOMContentLoaded', () => pollOrders());
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') pollOrders();
+});
 setInterval(pollOrders, 5000);
 </script>
 {% endblock %}
