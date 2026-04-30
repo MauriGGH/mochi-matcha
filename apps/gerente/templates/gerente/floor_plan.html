@@ -148,9 +148,76 @@
   </div>
 </div>
 
+<!-- Modal: Procesar Pago -->
+<div class="modal fade" id="pagoModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px;">
+    <div class="modal-content rounded-4 border-0">
+      <div class="modal-body p-4">
+        <h5 class="fw-bold mb-1">Procesar pago</h5>
+        <p style="font-size:.85rem; color:var(--mm-text-muted);" id="pagoSubtitle">Toda la mesa</p>
+        <div style="font-size:1.75rem; font-weight:700;" id="pagoTotal"></div>
+        <p class="fw-semibold mb-2 mt-3" style="font-size:.875rem;">Método de pago</p>
+        <div id="metodosContainer" class="mb-3"></div>
+        <div class="mb-4">
+          <label class="form-label fw-semibold" style="font-size:.875rem;">Monto recibido</label>
+          <div class="input-group">
+            <span class="input-group-text" style="background:var(--mm-cream); border-color:var(--mm-border);">$</span>
+            <input type="number" id="montoRecibido" class="form-control" placeholder="0.00" step="0.01" oninput="calcCambio()">
+          </div>
+          <div id="cambioDisplay" style="font-size:.875rem; color:var(--mm-success); margin-top:.35rem; display:none;"></div>
+          <div id="montoError" style="font-size:.8rem; color:#721c24; background:#FDEDEC; border-radius:6px; padding:.4rem .75rem; margin-top:.35rem; display:none;"></div>
+        </div>
+        <form method="post" action="{% url 'mesero:procesar_pago' %}" id="pagoForm">
+          {% csrf_token %}
+          <input type="hidden" name="mesa_id" id="pagoMesaId">
+          <input type="hidden" name="metodo_pago_id" id="pagoMetodoId">
+          <input type="hidden" name="sesion_id" id="pagoSesionId">
+          <input type="hidden" name="monto_recibido" id="pagoMontoRecibido">
+          <button type="submit" class="btn btn-primary w-100 py-3 fw-bold" id="pagoSubmitBtn">Confirmar pago</button>
+        </form>
+        <button class="btn w-100 py-2 mt-2" style="background:var(--mm-cream-dark);" data-bs-dismiss="modal">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
+<!-- ═══ MODAL: Cancelar solicitud de pago ════════════════════════════ -->
+<div class="modal fade" id="modalCancelarSolicitudGte" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:var(--radius-md);border:none;">
+      <div class="modal-body p-4">
+        <h5 class="fw-bold mb-1 text-danger"><i class="bi bi-x-circle me-2"></i>Cancelar solicitud de pago</h5>
+        <p class="text-muted mb-3" style="font-size:.9rem;">¿Confirmas que deseas cancelar esta solicitud? La mesa permanecerá activa.</p>
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn flex-grow-1 py-2 fw-semibold text-danger" style="background:#FDEDEC;" onclick="ejecutarCancelarSolicitud()">
+            <i class="bi bi-x-circle me-1"></i>Sí, cancelar
+          </button>
+          <button class="btn flex-grow-1 py-2" style="background:var(--mm-cream-dark);" data-bs-dismiss="modal">Volver</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Confirmación genérica ════════════════════════════════ -->
+<div class="modal fade" id="modalConfirmarAccion" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:var(--radius-md);border:none;">
+      <div class="modal-body p-4">
+        <h5 class="fw-bold mb-2">Confirmar acción</h5>
+        <p id="confirmarAccionMsg" class="text-muted mb-3"></p>
+        <div class="d-flex gap-2">
+          <button id="btnConfirmarAccionOk" class="btn flex-grow-1 py-2 fw-semibold" style="background:var(--mm-danger);color:#fff;">Confirmar</button>
+          <button class="btn flex-grow-1 py-2" style="background:var(--mm-cream-dark);" data-bs-dismiss="modal">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const CSRF = getCsrf();
 let currentMesaId = null;
@@ -286,9 +353,14 @@ function renderTab(tab) {
             <div style="font-size:.75rem;color:var(--mm-text-muted);">${s.alias} · ${s.tipo_display} · ${s.fecha}</div></div>
             <span style="font-weight:700;color:var(--mm-green);">$${s.total.toFixed(2)}</span>
           </div>
-          <button class="btn btn-primary btn-sm w-100 mt-2 rounded-3" onclick="abrirPago(${panelData.mesa_id},${s.total})">
-            <i class="bi bi-cash-coin me-1"></i>Procesar pago
-          </button>
+          <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-primary btn-sm flex-grow-1 rounded-3" onclick="abrirPago(${panelData.mesa_id},${s.total})">
+              <i class="bi bi-cash-coin me-1"></i>Procesar pago
+            </button>
+            <button class="btn btn-sm rounded-3" style="background:#FDEDEC;color:var(--mm-danger);border:none;white-space:nowrap;" onclick="confirmarCancelarSolicitud(${s.id})">
+              <i class="bi bi-x-circle me-1"></i>Cancelar
+            </button>
+          </div>
         </div>`).join('') :
       '<div style="text-align:center;padding:2rem;color:var(--mm-text-muted);"><div style="font-size:2rem;">🔔</div><p style="font-size:.85rem;">Sin solicitudes</p></div>';
   }
@@ -310,14 +382,14 @@ function renderTab(tab) {
 }
 
 async function cerrarSesion(sid, alias) {
-  if (!confirm(`¿Cerrar sesión de ${alias}?`)) return;
+  if (!await confirmarAccion(`¿Cerrar sesión de ${alias}?`)) return;
   const res = await fetch('/mesero/sesion/cerrar/', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body: JSON.stringify({sesion_id:sid}) });
   const d = await res.json();
   if (d.ok) { showToast('Sesión cerrada', 'success'); selectMesa(currentMesaId, null, true); }
 }
 
 async function cerrarMesa() {
-  if (!confirm('¿Cerrar esta mesa?')) return;
+  if (!await confirmarAccion('¿Cerrar esta mesa? Todas las sesiones activas se cerrarán.')) return;
   const res = await fetch('/mesero/mesa/cerrar/', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body: JSON.stringify({mesa_id:currentMesaId}) });
   const d = await res.json();
   if (d.ok) { showToast('Mesa cerrada', 'success'); closePanel(); pollMesas(); }
@@ -344,9 +416,56 @@ async function confirmarCancelacion() {
   if (d.ok) { bootstrap.Modal.getInstance(document.getElementById('cancelarModal')).hide(); showToast('Pedido cancelado', 'success'); selectMesa(currentMesaId, null, true); }
 }
 
-function abrirPago(mesaId, total) {
-  // Redirect to mesero pago view
-  window.location.href = `/mesero/pago/?mesa=${mesaId}`;
+function abrirPago(mesaId, total, sesionId=null) {
+  document.getElementById('pagoMesaId').value = mesaId;
+  document.getElementById('pagoSesionId').value = sesionId || '';
+  document.getElementById('pagoTotal').textContent = `$${parseFloat(total).toFixed(2)}`;
+  document.getElementById('pagoSubtitle').textContent = sesionId ? 'Cobro individual' : 'Toda la mesa';
+  document.getElementById('metodosContainer').innerHTML = [
+    {id:1,nombre:'Efectivo',icon:'💵'},{id:2,nombre:'Tarjeta',icon:'💳'},{id:3,nombre:'Mixto',icon:'🔀'}
+  ].map((m,i)=>`
+    <label style="display:flex;align-items:center;gap:.75rem;padding:.85rem 1rem;border:1.5px solid var(--mm-border);border-radius:var(--radius-sm);margin-bottom:.5rem;cursor:pointer;" class="metodo-opt" onclick="selMetodo(${m.id},this)">
+      <input type="radio" value="${m.id}" ${i===0?'checked':''} style="display:none;">
+      <span>${m.icon}</span><span style="font-weight:600;">${m.nombre}</span>
+    </label>`).join('');
+  document.getElementById('pagoMetodoId').value = 1;
+  const first = document.querySelector('#pagoModal .metodo-opt');
+  if (first) { first.style.borderColor='var(--mm-green)'; first.style.background='var(--mm-green-pale)'; }
+  document.getElementById('montoRecibido').value = '';
+  document.getElementById('cambioDisplay').style.display = 'none';
+  document.getElementById('montoError').style.display = 'none';
+  document.getElementById('pagoMontoRecibido').value = '';
+  const btn = document.getElementById('pagoSubmitBtn');
+  btn.disabled = false;
+  btn.textContent = 'Confirmar pago';
+  new bootstrap.Modal(document.getElementById('pagoModal')).show();
+}
+
+function selMetodo(id, el) {
+  document.getElementById('pagoMetodoId').value = id;
+  document.querySelectorAll('#pagoModal .metodo-opt').forEach(o=>{ o.style.borderColor='var(--mm-border)'; o.style.background='transparent'; });
+  el.style.borderColor = 'var(--mm-green)'; el.style.background = 'var(--mm-green-pale)';
+}
+
+function calcCambio() {
+  const totalText = document.getElementById('pagoTotal').textContent.replace('$','');
+  const total  = parseFloat(totalText) || 0;
+  const monto  = parseFloat(document.getElementById('montoRecibido').value) || 0;
+  const cambio = document.getElementById('cambioDisplay');
+  const err    = document.getElementById('montoError');
+  document.getElementById('pagoMontoRecibido').value = monto > 0 ? monto : '';
+  if (monto > 0 && monto < total) {
+    cambio.style.display = 'none';
+    err.textContent = `⚠ Faltan $${(total - monto).toFixed(2)} para cubrir el total`;
+    err.style.display = 'block';
+  } else if (monto >= total && total > 0) {
+    cambio.style.display = 'block';
+    cambio.textContent   = `Cambio: $${(monto - total).toFixed(2)}`;
+    err.style.display    = 'none';
+  } else {
+    cambio.style.display = 'none';
+    err.style.display    = 'none';
+  }
 }
 
 function abrirAsistido(sesionId, alias) {
@@ -370,5 +489,68 @@ async function confirmarAsistido() {
 }
 
 function abrirAgregarCliente() { showToast('Función disponible en el módulo mesero', ''); }
+
+// ── Validación y reset del modal de pago ─────────────────────────────────────
+document.getElementById('pagoForm').addEventListener('submit', function(e) {
+  const total = parseFloat(document.getElementById('pagoTotal').textContent.replace('$','')) || 0;
+  const monto = parseFloat(document.getElementById('montoRecibido').value) || 0;
+  if (monto > 0 && monto < total) {
+    e.preventDefault();
+    const err = document.getElementById('montoError');
+    err.textContent = `⚠ Monto insuficiente. Faltan $${(total - monto).toFixed(2)} para completar el pago.`;
+    err.style.display = 'block';
+    document.getElementById('montoRecibido').focus();
+    return;
+  }
+  document.getElementById('pagoMontoRecibido').value = monto > 0 ? monto : '';
+  const btn = document.getElementById('pagoSubmitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando…';
+});
+
+document.getElementById('pagoModal').addEventListener('hidden.bs.modal', () => {
+  const btn = document.getElementById('pagoSubmitBtn');
+  btn.disabled = false;
+  btn.textContent = 'Confirmar pago';
+  document.getElementById('montoError').style.display = 'none';
+  document.getElementById('cambioDisplay').style.display = 'none';
+});
+
+// ─── Cancelar solicitud de pago (gerente) ─────────────────────────────────────
+let _solicitudIdACancelar = null;
+
+function confirmarCancelarSolicitud(id) {
+  _solicitudIdACancelar = id;
+  new bootstrap.Modal(document.getElementById('modalCancelarSolicitudGte')).show();
+}
+
+async function ejecutarCancelarSolicitud() {
+  if (!_solicitudIdACancelar) return;
+  const modal = bootstrap.Modal.getInstance(document.getElementById('modalCancelarSolicitudGte'));
+  try {
+    const res = await fetch('{% url "gerente:cancelar_solicitud_pago" %}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+      body: JSON.stringify({solicitud_id: _solicitudIdACancelar}),
+    });
+    const d = await res.json();
+    modal && modal.hide();
+    showToast(d.ok ? (d.mensaje || 'Solicitud cancelada') : (d.error || 'Error'), d.ok ? 'success' : 'error');
+    if (d.ok && currentMesaId) setTimeout(() => selectMesa(currentMesaId), 400);
+  } catch(e) { showToast('Error de red', 'error'); }
+  _solicitudIdACancelar = null;
+}
+
+// Confirmación genérica (reemplaza confirm() nativo)
+function confirmarAccion(mensaje) {
+  return new Promise(resolve => {
+    document.getElementById('confirmarAccionMsg').textContent = mensaje;
+    const el = document.getElementById('modalConfirmarAccion');
+    const m = new bootstrap.Modal(el);
+    el.addEventListener('hidden.bs.modal', () => resolve(false), {once: true});
+    document.getElementById('btnConfirmarAccionOk').onclick = () => { m.hide(); resolve(true); };
+    m.show();
+  });
+}
 </script>
 {% endblock %}

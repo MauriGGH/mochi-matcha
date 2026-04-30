@@ -9,7 +9,8 @@
 <div class="nav-section-label">Gestión</div>
 <a href="{% url 'gerente:productos' %}"><i class="bi bi-basket-fill"></i> Gestión de Menú</a>
 <div class="nav-section-label">Reportes</div>
-<a href="{% url 'gerente:reportes' %}" class="active"><i class="bi bi-bar-chart-fill"></i> Reportes</a>
+<a href="{% url 'gerente:reportes' %}" {% if not vista or vista == 'reportes' %}class="active"{% endif %}><i class="bi bi-bar-chart-fill"></i> Reportes</a>
+<a href="{% url 'gerente:reportes_quincenales' %}" {% if vista == 'quincenales' %}class="active"{% endif %}><i class="bi bi-calendar2-week"></i> Quincenales</a>
 <div class="nav-section-label">Admin</div>
 <a href="{% url 'gerente:empleados' %}"><i class="bi bi-people-fill"></i> Empleados</a>
 <a href="{% url 'gerente:configuracion' %}"><i class="bi bi-gear-fill"></i> Configuración</a>
@@ -55,6 +56,46 @@
   </table>
 </div>
 
+{% elif vista == 'quincenales' %}
+<!-- ═══ REPORTES QUINCENALES ════════════════════════════════════════════════ -->
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h5 class="fw-bold mb-0">Reportes quincenales</h5>
+    <p style="font-size:.8rem; color:var(--mm-text-muted); margin:0;">Archivos generados automáticamente por el cron</p>
+  </div>
+  <a href="{% url 'gerente:reportes' %}" class="btn btn-sm" style="background:var(--mm-cream-dark);">
+    <i class="bi bi-arrow-left me-1"></i>Volver a reportes
+  </a>
+</div>
+
+{% if archivos_quincenales %}
+<div class="row g-3">
+  {% for archivo in archivos_quincenales %}
+  <div class="col-md-6 col-lg-4">
+    <div style="border:1px solid var(--mm-border); border-radius:var(--radius-md); background:var(--mm-white); padding:1.25rem; display:flex; align-items:center; gap:1rem;">
+      <i class="bi {{ archivo.icono }}" style="font-size:2rem; color:{{ archivo.color }};"></i>
+      <div style="flex:1; min-width:0;">
+        <div class="fw-semibold text-truncate" style="font-size:.875rem;" title="{{ archivo.nombre }}">{{ archivo.nombre }}</div>
+        <div style="font-size:.75rem; color:var(--mm-text-muted);">{{ archivo.tipo }} · {{ archivo.tamaño }}</div>
+      </div>
+      <a href="{{ archivo.url }}" download class="btn btn-sm px-3" style="background:{{ archivo.color }}; color:#fff;">
+        <i class="bi bi-download"></i>
+      </a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5" style="background:var(--mm-cream); border-radius:var(--radius-md); color:var(--mm-text-muted);">
+  <div style="font-size:3rem; margin-bottom:1rem;">📁</div>
+  <h6 class="fw-bold">No hay reportes generados aún</h6>
+  <p style="font-size:.875rem;">Ejecuta el comando para generar el primero:</p>
+  <code style="font-size:.8rem; background:#fff; padding:.25rem .75rem; border-radius:4px; border:1px solid var(--mm-border);">
+    python manage.py generar_reportes_quincenales
+  </code>
+</div>
+{% endif %}
+
 {% else %}
 <!-- ═══ REPORTES ════════════════════════════════════════════════════════════ -->
 
@@ -64,6 +105,18 @@
   <div class="d-flex gap-2 align-items-center">
     <a href="{% url 'gerente:auditoria' %}" class="btn btn-sm" style="background:var(--mm-cream-dark); font-size:.8rem;">
       <i class="bi bi-shield-check me-1"></i>Ver auditoría
+    </a>
+    <a href="{% url 'gerente:reportes_quincenales' %}" class="btn btn-sm" style="background:var(--mm-cream-dark); font-size:.8rem;">
+      <i class="bi bi-calendar2-week me-1"></i>Quincenales
+    </a>
+    <!-- Export buttons -->
+    <a href="{% url 'gerente:reporte_exportar' %}?formato=excel&desde={{ desde|date:'Y-m-d' }}&hasta={{ hasta|date:'Y-m-d' }}"
+       class="btn btn-sm" style="background:#1D6F42; color:#fff; font-size:.8rem;" title="Exportar a Excel">
+      <i class="bi bi-file-earmark-excel me-1"></i>Excel
+    </a>
+    <a href="{% url 'gerente:reporte_exportar' %}?formato=pdf&desde={{ desde|date:'Y-m-d' }}&hasta={{ hasta|date:'Y-m-d' }}"
+       class="btn btn-sm" style="background:#C0392B; color:#fff; font-size:.8rem;" title="Exportar a PDF">
+      <i class="bi bi-file-earmark-pdf me-1"></i>PDF
     </a>
     <div class="dropdown">
       <button class="btn btn-sm dropdown-toggle" style="background:var(--mm-white); border:1px solid var(--mm-border); font-size:.85rem;" data-bs-toggle="dropdown">

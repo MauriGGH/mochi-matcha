@@ -27,8 +27,8 @@
 <div style="max-width:680px;">
 
   <!-- Modo mantenimiento -->
-  <div style="background:var(--mm-white); border:1px solid var(--mm-border); border-radius:var(--radius-md); padding:1.5rem; margin-bottom:1.25rem;">
-    <h6 class="fw-bold mb-1">Modo de mantenimiento</h6>
+  <div>
+    <h6 class="fw-bold mb-3">🚧 Modo mantenimiento</h6>
     <p style="font-size:.875rem; color:var(--mm-text-muted); margin-bottom:1.25rem;">Activa una pantalla informativa para los clientes mientras realizas actualizaciones.</p>
 
     <div style="border:1px solid var(--mm-border); border-radius:var(--radius-sm); padding:1rem; margin-bottom:1.25rem;"
@@ -37,11 +37,14 @@
         <div style="width:40px;height:40px;background:var(--mm-cream-dark);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">⏸</div>
         <div>
           <div style="font-weight:600;font-size:.9rem;">Modo mantenimiento</div>
-          <div style="font-size:.78rem;color:var(--mm-text-muted);" id="maintenanceLabel">Inactivo — restaurante operando con normalidad</div>
+          <div style="font-size:.78rem;color:var(--mm-text-muted);" id="maintenanceLabel">
+            {% if modo_mantenimiento %}Activo — los clientes ven la pantalla de mantenimiento{% else %}Inactivo — restaurante operando con normalidad{% endif %}
+          </div>
         </div>
       </div>
       <div class="form-check form-switch mb-0">
         <input class="form-check-input" type="checkbox" id="maintenanceToggle"
+               {% if modo_mantenimiento %}checked{% endif %}
                onchange="toggleMaintenance(this)"
                style="cursor:pointer;width:2.75em;height:1.35em;accent-color:var(--mm-green);">
       </div>
@@ -50,7 +53,7 @@
     <div>
       <label class="form-label fw-semibold" style="font-size:.875rem;">Mensaje personalizado</label>
       <textarea id="maintenanceMsg" class="form-control" rows="3"
-                style="border-color:var(--mm-border);resize:none;font-size:.875rem;">Estamos realizando mejoras. Volvemos en breve. 🍵</textarea>
+                style="border-color:var(--mm-border);resize:none;font-size:.875rem;">{{ mensaje_mantenimiento|default:"Estamos realizando mejoras. Volvemos en breve. 🍵" }}</textarea>
       <p style="font-size:.75rem;color:var(--mm-text-muted);margin-top:.35rem;">Este mensaje se mostrará a los clientes cuando intenten acceder.</p>
     </div>
   </div>
@@ -67,14 +70,14 @@
           Tiempo de advertencia
         </label>
         <div class="d-flex align-items-center gap-3">
-          <input type="range" id="yellowSlider" min="1" max="30" value="8"
+          <input type="range" id="yellowSlider" min="1" max="30" value="{{ semaforo_yellow }}"
                  class="form-range flex-grow-1" oninput="updateSliders()"
                  style="accent-color:#F39C12;">
           <div style="min-width:56px;text-align:center;font-weight:700;background:var(--mm-cream-dark);border-radius:var(--radius-sm);padding:.3rem .5rem;">
-            <span id="yellowVal">8</span> <span style="font-size:.7rem;font-weight:400;">min</span>
+            <span id="yellowVal">{{ semaforo_yellow }}</span> <span style="font-size:.7rem;font-weight:400;">min</span>
           </div>
         </div>
-        <p style="font-size:.75rem;color:var(--mm-text-muted);margin-top:.3rem;">Ticket se vuelve ámbar después de <span id="yellowDesc">8</span> minutos</p>
+        <p style="font-size:.75rem;color:var(--mm-text-muted);margin-top:.3rem;">Ticket se vuelve ámbar después de <span id="yellowDesc">{{ semaforo_yellow }}</span> minutos</p>
       </div>
       <div class="col-md-6">
         <label class="d-flex align-items-center gap-2 mb-2" style="font-size:.875rem;font-weight:600;">
@@ -82,14 +85,14 @@
           Tiempo crítico
         </label>
         <div class="d-flex align-items-center gap-3">
-          <input type="range" id="redSlider" min="1" max="60" value="15"
+          <input type="range" id="redSlider" min="1" max="60" value="{{ semaforo_red }}"
                  class="form-range flex-grow-1" oninput="updateSliders()"
                  style="accent-color:#E74C3C;">
           <div style="min-width:56px;text-align:center;font-weight:700;background:var(--mm-cream-dark);border-radius:var(--radius-sm);padding:.3rem .5rem;">
-            <span id="redVal">15</span> <span style="font-size:.7rem;font-weight:400;">min</span>
+            <span id="redVal">{{ semaforo_red }}</span> <span style="font-size:.7rem;font-weight:400;">min</span>
           </div>
         </div>
-        <p style="font-size:.75rem;color:var(--mm-text-muted);margin-top:.3rem;">Ticket se vuelve rojo después de <span id="redDesc">15</span> minutos</p>
+        <p style="font-size:.75rem;color:var(--mm-text-muted);margin-top:.3rem;">Ticket se vuelve rojo después de <span id="redDesc">{{ semaforo_red }}</span> minutos</p>
       </div>
     </div>
 
@@ -128,9 +131,7 @@
 
 {% block extra_scripts %}
 <script>
-const saved = JSON.parse(localStorage.getItem('kds_settings') || '{"yellow":8,"red":15}');
-document.getElementById('yellowSlider').value = saved.yellow;
-document.getElementById('redSlider').value = saved.red;
+// Los valores iniciales ya vienen renderizados desde el servidor en los atributos value del slider.
 updateSliders();
 
 function updateSliders() {
@@ -152,11 +153,27 @@ function toggleMaintenance(cb) {
     : 'Inactivo — restaurante operando con normalidad';
 }
 
-function guardarConfig() {
+async function guardarConfig() {
   const y = +document.getElementById('yellowSlider').value;
   const r = +document.getElementById('redSlider').value;
-  localStorage.setItem('kds_settings', JSON.stringify({yellow:y, red:r}));
-  showToast('Configuración guardada ✓', 'success');
+  const mant = document.getElementById('maintenanceToggle').checked;
+  const msg = (document.getElementById('maintenanceMsg')?.value || '').trim();
+  try {
+    const res = await fetch(window.location.pathname, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
+      body: JSON.stringify({yellow: y, red: r, modo_mantenimiento: mant, mensaje_mantenimiento: msg}),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      localStorage.setItem('kds_settings', JSON.stringify({yellow:y, red:r}));
+      showToast('Configuración guardada ✓', 'success');
+    } else {
+      showToast('Error al guardar', 'error');
+    }
+  } catch(e) {
+    showToast('Error de conexión', 'error');
+  }
 }
 </script>
 {% endblock %}
