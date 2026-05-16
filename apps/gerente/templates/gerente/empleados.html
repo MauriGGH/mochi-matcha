@@ -1,9 +1,19 @@
 {% extends "base/staff_base.html" %}
 {% load static %}
 
+{% comment %}=========================================================================
+   empleados.html — CRUD de empleados del gerente.
+   Lista empleados activos e inactivos con avatar generado por iniciales,
+   badge de rol con color por categoría (gerente/cocina/mesero) y acciones
+   de editar, desactivar y reactivar. Un único modal Bootstrap (#empModal)
+   se reutiliza para alta y edición, adaptando el endpoint de envío y los
+   campos opcionales (contraseña en edición, usuario solo-lectura).
+   ========================================================================={% endcomment %}
+
 {% block title %}Empleados{% endblock %}
 {% block page_title %}Empleados{% endblock %}
 
+{# ── Navegación lateral del panel gerente ── #}
 {% block sidebar_nav %}
 <a href="{% url 'gerente:floor_plan' %}"><i class="bi bi-grid-fill"></i> Floor Plan</a>
 <div class="nav-section-label">Gestión</div>
@@ -17,6 +27,7 @@
 
 {% block content %}
 
+{# ── Encabezado: contador de activos/inactivos y botón de nuevo empleado ── #}
 <div class="d-flex align-items-center justify-content-between mb-4">
   <div>
     <h5 class="fw-bold mb-0">Empleados</h5>
@@ -27,30 +38,31 @@
   </button>
 </div>
 
+{# ── Lista de empleados activos ── #}
 {% if activos %}
 <div class="mb-1" style="font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--mm-text-muted);">Activos ({{ activos|length }})</div>
 <div class="mb-4">
   {% for emp in activos %}
   <div style="border:1px solid var(--mm-border); border-radius:var(--radius-md); padding:1rem 1.25rem; margin-bottom:.5rem; background:var(--mm-white);" class="d-flex align-items-center gap-3">
-    <!-- Avatar -->
+    <!-- Avatar: color según rol (dorado=gerente, naranja=cocina, verde=mesero) -->
     <div style="width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1rem; color:#fff; flex-shrink:0;
         background:{% if emp.rol == 'gerente' or emp.rol == 'admin' %}var(--mm-gold){% elif emp.rol == 'cocina' %}#e67e22{% else %}var(--mm-green){% endif %};">
       {{ emp.nombre|first|upper }}{{ emp.nombre|slice:"1:2"|upper }}
     </div>
-    <!-- Info -->
+    <!-- Info: nombre, usuario y última sesión -->
     <div class="flex-grow-1">
       <div style="font-weight:600; font-size:.95rem;">{{ emp.nombre }}</div>
       <div style="font-size:.78rem; color:var(--mm-text-muted);">@{{ emp.usuario }}
         {% if emp.last_login %} · Desde {{ emp.last_login|date:"d/m/Y" }}{% endif %}
       </div>
     </div>
-    <!-- Role badge -->
+    <!-- Role badge: color diferenciado por rol del empleado -->
     <span style="background:{% if emp.rol == 'gerente' or emp.rol == 'admin' %}var(--mm-gold-pale){% elif emp.rol == 'cocina' %}#FEF3E7{% else %}var(--mm-green-pale){% endif %};
                  color:{% if emp.rol == 'gerente' or emp.rol == 'admin' %}var(--mm-gold){% elif emp.rol == 'cocina' %}#e67e22{% else %}var(--mm-green){% endif %};
                  border-radius:99px; padding:.2rem .75rem; font-size:.75rem; font-weight:700;">
       {{ emp.get_rol_display }}
     </span>
-    <!-- Actions -->
+    <!-- Actions: editar (abre modal con datos precargados) y desactivar empleado -->
     <div class="d-flex gap-1">
       <button class="btn btn-link btn-sm p-1" onclick="openEditEmpleado({{ emp.id_empleado }}, '{{ emp.nombre|escapejs }}', '{{ emp.usuario|escapejs }}', '{{ emp.rol }}')" title="Editar">
         <i class="bi bi-pencil" style="color:var(--mm-text-muted);"></i>
@@ -64,6 +76,7 @@
 </div>
 {% endif %}
 
+{# ── Lista de empleados inactivos (opacidad reducida, sin acciones de edición) ── #}
 {% if inactivos %}
 <div class="mb-1" style="font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--mm-text-muted);">Inactivos ({{ inactivos|length }})</div>
 <div>
@@ -87,14 +100,18 @@
 </div>
 {% endif %}
 
+{# ── Estado vacío: se muestra cuando no hay ningún empleado registrado ── #}
 {% if not activos and not inactivos %}
 <div class="text-center py-5" style="color:var(--mm-text-muted);">
-  <div style="font-size:3rem; margin-bottom:1rem;">👥</div>
+  <i class="bi bi-people-fill" style="font-size:3rem; margin-bottom:1rem; display:block;"></i>
   <h6 class="fw-bold mb-1">No hay empleados registrados</h6>
   <p style="font-size:.875rem;">Crea el primer empleado con el botón de arriba</p>
 </div>
 {% endif %}
 
+{% comment %}── Modal reutilizable para alta y edición de empleados.
+      openNewEmpleado() configura endpoint y campos para creación.
+      openEditEmpleado() precarga datos y marca usuario como solo-lectura. ──{% endcomment %}
 <!-- Modal: Nuevo empleado -->
 <div class="modal fade" id="empModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width:440px;">
@@ -108,11 +125,11 @@
           {% csrf_token %}
           <div class="mb-3">
             <label class="form-label fw-semibold" style="font-size:.85rem;">Nombre completo <span class="text-danger">*</span></label>
-            <input type="text" name="nombre" id="eNombre" required class="form-control" style="border-color:var(--mm-border);" placeholder="ej. Ana García">
+            <input type="text" name="nombre" id="eNombre" required maxlength="100" data-upper class="form-control" style="border-color:var(--mm-border);" placeholder="ej. Ana García">
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold" style="font-size:.85rem;">Usuario <span class="text-danger">*</span></label>
-            <input type="text" name="usuario" id="eUsuario" required class="form-control" style="border-color:var(--mm-border);" placeholder="ej. ana.garcia" autocomplete="off">
+            <input type="text" name="usuario" id="eUsuario" required maxlength="50" class="form-control" style="border-color:var(--mm-border);" placeholder="ej. ana.garcia" autocomplete="off">
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold" style="font-size:.85rem;">Contraseña <span id="passRequired" class="text-danger">*</span></label>
@@ -149,6 +166,7 @@
 <script>
 const CSRF = getCsrf();
 
+// openNewEmpleado — prepara el modal para crear un nuevo empleado (contraseña obligatoria)
 function openNewEmpleado() {
   document.getElementById('empModalTitle').textContent = 'Nuevo empleado';
   document.getElementById('empForm').action = '{% url "gerente:empleados_nuevo" %}';
@@ -162,6 +180,8 @@ function openNewEmpleado() {
   new bootstrap.Modal(document.getElementById('empModal')).show();
 }
 
+// openEditEmpleado — precarga datos del empleado en el modal para edición.
+//   El usuario se bloquea (readOnly) y la contraseña es opcional.
 function openEditEmpleado(id, nombre, usuario, rol) {
   document.getElementById('empModalTitle').textContent = 'Editar empleado';
   document.getElementById('empForm').action = `{% url "gerente:empleado_editar" 0 %}`.replace('/0/', `/${id}/`);
@@ -175,6 +195,8 @@ function openEditEmpleado(id, nombre, usuario, rol) {
   new bootstrap.Modal(document.getElementById('empModal')).show();
 }
 
+// toggleEmpleado — activa o desactiva un empleado vía POST al endpoint empleado_toggle;
+//   recarga la página si la operación es exitosa
 async function toggleEmpleado(id, activo) {
   const accion = activo ? 'desactivar' : 'reactivar';
   if (!confirm(`¿${accion.charAt(0).toUpperCase() + accion.slice(1)} este empleado?`)) return;
@@ -185,6 +207,7 @@ async function toggleEmpleado(id, activo) {
   if (d.ok) location.reload();
 }
 
+// toggleEmpPass — alterna la visibilidad del campo de contraseña y el ícono del ojo
 function toggleEmpPass() {
   const input = document.getElementById('ePassword');
   const eye = document.getElementById('empPassEye');

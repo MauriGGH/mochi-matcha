@@ -1,17 +1,21 @@
 /* =============================================
    Mochi Matcha — Cliente App Styles
+   Estilos exclusivos de la interfaz del cliente final.
+   Depende de mochi.css (tokens) cargado antes en cliente_base.html.
    ============================================= */
 
-/* ---- Bottom Nav ---- */
+/* ---- Bottom Nav — barra de navegación inferior fija ---- */
+/* position: fixed + width/max-width definidos en cliente_base.html para
+   anclarlo al viewport visible y respetar el ancho del shell. */
 .client-bottom-nav {
-  position: sticky;
-  bottom: 0;
-  left: 0; right: 0;
   height: 72px;
+  /* añade espacio para el home indicator de iPhone */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  height: calc(72px + env(safe-area-inset-bottom, 0px));
   background: var(--mm-white);
   border-top: 1px solid var(--mm-border);
   display: flex;
-  z-index: 100;
+  box-shadow: 0 -2px 8px rgba(0,0,0,.04);
 }
 .client-bottom-nav .nav-item {
   flex: 1;
@@ -32,6 +36,7 @@
 .client-bottom-nav .nav-item.active i {
   filter: drop-shadow(0 0 6px rgba(61,107,79,.4));
 }
+/* Badge numérico sobre el ícono del carrito en el nav inferior */
 .nav-badge {
   position: absolute;
   top: 6px; right: calc(50% - 18px);
@@ -45,7 +50,7 @@
   padding: 0 4px;
 }
 
-/* ---- Welcome Screen ---- */
+/* ---- Welcome Screen — pantalla de bienvenida por QR (bienvenida.html) ---- */
 .welcome-hero {
   background: linear-gradient(160deg, var(--mm-green-dark) 0%, var(--mm-green) 100%);
   padding: 3rem 1.5rem 2rem;
@@ -61,6 +66,7 @@
 }
 .welcome-hero .subtitle { font-size: .95rem; opacity: .85; }
 
+/* Tarjeta blanca que "flota" sobre el hero verde con margen negativo */
 .welcome-card {
   margin: -1.5rem 1rem 0;
   border-radius: var(--radius-xl);
@@ -70,6 +76,7 @@
   position: relative;
   z-index: 2;
 }
+/* Pill verde claro que muestra el número e identificador de la mesa */
 .mesa-badge {
   display: inline-flex;
   align-items: center;
@@ -83,7 +90,7 @@
   margin-bottom: 1.25rem;
 }
 
-/* ---- Alias Options (Mesa ocupada) ---- */
+/* ---- Option Cards — tarjetas seleccionables (mesa ocupada: "Soy nuevo" / "Ya tengo cuenta") ---- */
 .option-card {
   border: 2px solid var(--mm-border);
   border-radius: var(--radius-md);
@@ -98,7 +105,7 @@
 }
 .option-card i { font-size: 1.75rem; color: var(--mm-green); margin-bottom: .5rem; }
 
-/* ---- PIN display ---- */
+/* ---- PIN display — cuadrícula de 4 dígitos para mostrar el PIN de la mesa ---- */
 .pin-display {
   display: flex;
   justify-content: center;
@@ -117,7 +124,7 @@
   font-family: var(--font-mono);
 }
 
-/* ---- Category Tabs ---- */
+/* ---- Category Tabs — fila horizontal scrolleable de filtros de categoría (menu.html) ---- */
 .category-tabs {
   display: flex;
   gap: .5rem;
@@ -147,7 +154,7 @@
   color: #fff;
 }
 
-/* ---- Product Card ---- */
+/* ---- Product Card — tarjeta de producto en la cuadrícula del menú ---- */
 .product-card {
   background: var(--mm-white);
   border-radius: var(--radius-md);
@@ -178,6 +185,7 @@
 .product-price { font-weight: 700; color: var(--mm-green); font-size: 1rem; }
 .product-unavail { font-size: .7rem; color: var(--mm-danger); font-weight: 600; }
 
+/* Botón circular "+" que abre el modal del producto sin navegar a otra página */
 .add-btn {
   width: 32px; height: 32px;
   background: var(--mm-green);
@@ -190,7 +198,7 @@
 }
 .add-btn:hover { background: var(--mm-green-dark); }
 
-/* ---- Product Modal ---- */
+/* ---- Product Modal — bottom sheet con imagen, modificadores, notas y cantidad ---- */
 .modal-product-img {
   width: 100%;
   height: 200px;
@@ -220,6 +228,7 @@
 .modifier-option input { display: none; }
 .modifier-extra { font-size: .75rem; color: var(--mm-gold); font-weight: 600; }
 
+/* Control de cantidad: botones − y + con el valor numérico centrado */
 .qty-control {
   display: flex; align-items: center; gap: .75rem;
 }
@@ -236,7 +245,7 @@
 .qty-btn:hover { border-color: var(--mm-green); color: var(--mm-green); }
 .qty-value { font-size: 1.1rem; font-weight: 700; min-width: 24px; text-align: center; }
 
-/* ---- Cart ---- */
+/* ---- Cart — ítems y barra de total del carrito (carrito.html) ---- */
 .cart-item {
   background: var(--mm-white);
   border: 1px solid var(--mm-border);
@@ -254,7 +263,7 @@
   padding: 1rem 1.25rem;
 }
 
-/* ---- Order Tracking ---- */
+/* ---- Order Tracking — tarjetas y badges de estado del pedido (pedidos.html) ---- */
 .order-card {
   background: var(--mm-white);
   border: 1px solid var(--mm-border);
@@ -276,7 +285,7 @@
 .status-entregado { background: #F2F3F4; color: #566573; }
 .status-cancelado { background: #FDEDEC; color: #C0392B; }
 
-/* ---- Progress stepper ---- */
+/* ---- Progress Stepper — indicador visual de 3 etapas: recibido / preparando / listo ---- */
 .order-steps {
   display: flex;
   align-items: center;
@@ -311,4 +320,5 @@
   height: 2px;
   background: var(--mm-border);
 }
+/* Línea completada: se colorea en verde cuando el estado siguiente ya fue alcanzado */
 .step-line.done { background: var(--mm-green); }

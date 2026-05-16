@@ -30,17 +30,22 @@ def rol_requerido(*roles):
     return decorator
 
 
-# Shortcuts
+# Shortcuts — decoradores de conveniencia por módulo.
+# Gerente y admin tienen acceso superconjunto a todos los módulos de staff.
 def mesero_requerido(view_func):
+    """Acceso para meseros, gerentes y administradores."""
     return rol_requerido("mesero", "gerente", "admin")(view_func)
 
 def gerente_requerido(view_func):
+    """Acceso restringido a gerentes y administradores."""
     return rol_requerido("gerente", "admin")(view_func)
 
 def cocina_requerido(view_func):
+    """Acceso para personal de cocina/bar, gerentes y administradores."""
     return rol_requerido("cocina", "gerente", "admin")(view_func)
 
 def admin_requerido(view_func):
+    """Acceso exclusivo para administradores."""
     return rol_requerido("admin")(view_func)
 
 

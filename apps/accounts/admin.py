@@ -1,3 +1,11 @@
+"""
+apps/accounts/admin.py — Registro del modelo Empleado en el panel de administración.
+
+Se oculta el modelo Group de Django porque el control de acceso se hace mediante
+el campo `rol` del Empleado, no con grupos de permisos de Django.
+EmpleadoAdmin hereda de UserAdmin para que la contraseña se maneje con el widget
+seguro de Django (hash, cambio de contraseña).
+"""
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import Group
@@ -11,6 +19,11 @@ except admin.sites.NotRegistered:
 
 @admin.register(Empleado)
 class EmpleadoAdmin(UserAdmin):
+    """
+    Administración de empleados. Usa UserAdmin como base para heredar el manejo
+    seguro de contraseñas. `add_fieldsets` define los campos visibles al crear
+    un empleado nuevo desde el admin.
+    """
     fieldsets = (
         (None, {'fields': ('usuario', 'password')}),
         ('Información personal', {'fields': ('nombre',)}),

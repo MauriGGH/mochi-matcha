@@ -1,3 +1,17 @@
+"""
+cocina/urls.py — Rutas del módulo KDS (Kitchen Display System).
+
+Prefijo montado en: /cocina/  (ver config/urls.py)
+Namespace:          cocina
+
+Rutas expuestas
+---------------
+/cocina/login/          → login exclusivo para personal de cocina/bar.
+/cocina/logout/         → cierre de sesión y retorno al login.
+/cocina/kds/            → pantalla principal del KDS (vista HTML).
+/cocina/pedidos-json/   → endpoint de polling; devuelve JSON con pendientes y listos.
+/cocina/marcar-listo/   → endpoint POST para avanzar el estado de un pedido por área.
+"""
 from django.urls import path
 from . import views
 

@@ -33,6 +33,9 @@ services:
         condition: service_healthy
     stdin_open: true
     tty: true
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
 volumes:
   mariadb_data:

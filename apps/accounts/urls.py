@@ -1,11 +1,18 @@
+"""
+apps/accounts/urls.py — Rutas de autenticación global.
+
+Prefijo: /accounts/  (ver config/urls.py)
+Namespace: accounts
+
+/accounts/login/    → login genérico que redirige según el rol del empleado.
+/accounts/logout/   → cierre de sesión universal (para cualquier rol de staff).
+"""
 from django.urls import path
-from django.contrib.auth import views as auth_views
 from . import views
 
 app_name = 'accounts'
 
 urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
-    # login genérico (fallback; cada módulo tiene su propio login)
-    path('login/', auth_views.LoginView.as_view(template_name='base/login.html'), name='login'),
+    path('login/', views.login_view, name='login'),
 ]
