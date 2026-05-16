@@ -5,6 +5,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+# Instalar dependencias del sistema (las mismas que ya tenías)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     default-libmysqlclient-dev \
@@ -20,10 +21,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt /app/
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt gunicorn   # Añadimos gunicorn
 
 COPY . /app/
 
+# Recopilar archivos estáticos (asegúrate de que STATIC_ROOT esté configurado en settings.py)
+RUN python manage.py collectstatic --noinput
+
 EXPOSE 8000
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Comando de producción con Gunicorn (3 workers es un buen punto de partida para Raspberry Pi 4)
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]

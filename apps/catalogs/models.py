@@ -1,3 +1,15 @@
+"""
+apps/catalogs/models.py — Catálogos auxiliares del sistema.
+
+Estos modelos son tablas de referencia (catálogos) que no deben borrarse
+mientras existan registros relacionados. Se usan como FK con on_delete=PROTECT
+en los modelos principales (SesionCliente, Pedido, SolicitudPago).
+
+Catálogos incluidos:
+  ModalidadIngreso: cómo llegó el cliente (QR, asistido, etc.).
+  MetodoPago:       efectivo, tarjeta, mixto, PayPal, etc.
+  EstadoSolicitud:  estados de una solicitud de pago (pendiente, aprobada, etc.).
+"""
 from django.db import models
 
 
