@@ -1,293 +1,399 @@
 <div align="center">
 
-# 🍵 Mochi Matcha
+# Mochi Matcha — POS
 
-### Sistema de Gestión de Pedidos para Cafetería
+<p>
+  <img src="https://img.shields.io/badge/Django-5.0.2-092E20?style=flat&logo=django&logoColor=white" alt="Django">
+  <img src="https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/Bootstrap-5-7952B3?style=flat&logo=bootstrap&logoColor=white" alt="Bootstrap">
+  <img src="https://img.shields.io/badge/MariaDB-10.6-003545?style=flat&logo=mariadb&logoColor=white" alt="MariaDB">
+  <img src="https://img.shields.io/badge/JavaScript-ES6-F7DF1E?style=flat&logo=javascript&logoColor=black" alt="JavaScript">
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white" alt="Docker">
+  <img src="https://img.shields.io/badge/Licencia-MIT-green?style=flat" alt="MIT License">
+</p>
 
-*Desde el escaneo del QR hasta el cierre de mesa — todo en un solo sistema.*
-
-<br/>
-
-[![Django](https://img.shields.io/badge/Django_5-092E20?style=for-the-badge&logo=django&logoColor=white)](https://www.djangoproject.com/)
-[![Python](https://img.shields.io/badge/Python_3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![Bootstrap](https://img.shields.io/badge/Bootstrap_5-7952B3?style=for-the-badge&logo=bootstrap&logoColor=white)](https://getbootstrap.com/)
-[![MySQL](https://img.shields.io/badge/MySQL_8-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://www.mysql.com/)
-[![JavaScript](https://img.shields.io/badge/JavaScript_Vanilla-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/es/docs/Web/JavaScript)
-[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
+Sistema de punto de venta (POS) para restaurante, desarrollado en Django. Cubre el ciclo completo de operacion: el cliente escanea un QR en la mesa, ordena desde su dispositivo, cocina/bar recibe los pedidos en un KDS, el mesero gestiona mesas y cobros, y el gerente administra el catalogo, empleados y reportes.
 
 </div>
 
 ---
 
-## ¿Qué es Mochi Matcha?
+## Instalacion rapida
 
-**Mochi Matcha** es un sistema completo de gestión de pedidos diseñado para cafeterías. Los clientes escanean un código QR desde su móvil, eligen un alias y comienzan a ordenar — sin descargas, sin registros. El pedido viaja directo a la cocina, el mesero lo gestiona desde su panel y el gerente tiene visibilidad total del negocio en tiempo real.
+```bash
+# 1. Clonar el repositorio
+git clone <url-del-repo>
+cd mochi-matcha
 
----
-
-## ✨ Características principales
-
-| Característica | Descripción |
-|---|---|
-| 📲 **Acceso sin registro** | Escanea QR → elige alias → PIN de mesa generado automáticamente |
-| 👥 **Sesiones individuales** | Cada comensal en la misma mesa tiene su propio carrito y cuenta |
-| 🍽️ **Menú con modificadores** | Opciones personalizables (leche, extras) con precios en tiempo real |
-| 🔔 **Pedidos a cocina** | Confirmación automática y visualización FIFO en monitor KDS |
-| 🗺️ **Mapa de mesas en vivo** | Estado de cada mesa actualizado cada 3 segundos |
-| 💳 **Cobro flexible** | Pago individual o grupal — efectivo, tarjeta o mixto |
-| 📊 **Reportes de gestión** | Ventas, afluencia, tiempos de servicio y auditoría de cancelaciones |
-
----
-
-## 🏗️ Arquitectura
-
-```
-      ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐
-      │ 📱 Cliente │ │ 🧑 Mesero  │ │ 🍳 Cocina  │ │ 💼 Gerente │
-      │   (móvil)  │ │  (tablet)  │ │     KDS    │ │   (admin)  │
-      └─────┬──────┘ └─────┬──────┘ └─────┬──────┘ └─────┬──────┘
-            │              │              │              │
-            └──────────────┴──────────────┴──────────────┘
-                                    │
-                        ┌───────────▼───────────┐
-                        │       Django 5        │
-                        │      (Python 3.11)    │
-                        └───────────┬───────────┘
-                        
-                        ┌───────────▼───────────┐
-                        │     MySQL / MariaDB   │
-                        └───────────────────────┘
+# 2. Crear el archivo de variables de entorno
+cp env.example .env
 ```
 
-**Frontend:** Django Templates + Bootstrap 5 — diseño responsive, polling con JavaScript vanilla  
-**Backend:** Django 5 (Python 3.11) — autenticación dual (clientes vía cookie, staff vía sesión Django)  
-**Base de datos:** MySQL 8.0 / MariaDB
+Editar `.env` con los valores del entorno de desarrollo:
+
+```env
+# Base de datos
+MYSQL_ROOT_PASSWORD=root
+MYSQL_DATABASE=mochi_matcha
+MYSQL_USER=mochi
+MYSQL_PASSWORD=mochi_pass
+MYSQL_HOST=db
+MYSQL_PORT=3306
+
+# Django
+SECRET_KEY=django-insecure-dev-key-cambiar-en-produccion
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
+```
+
+```bash
+# 3. Levantar los contenedores
+docker compose up -d --build
+
+# 4. Aplicar migraciones
+docker exec mochi_matcha_web python manage.py migrate
+
+# 5. Cargar datos de prueba
+docker exec -it mochi_matcha_web python seed.py
+
+# 6. Acceder a la aplicacion
+#    http://localhost:8000
+```
+
+> Para instrucciones de despliegue en produccion (Nginx, Gunicorn, SSL), consultar la documentacion completa.
 
 ---
 
-## 📱 Módulos del sistema
+## Caracteristicas principales
+
+| Modulo | Funcionalidad |
+|--------|--------------|
+| **Cliente** | Acceso por QR, creacion/recuperacion de sesion con PIN, menu digital, carrito con modificadores y promociones, seguimiento de pedidos, solicitud de cuenta y ayuda |
+| **Mesero** | Mapa de mesas con estado en tiempo real (polling), pedidos asistidos, entrega y cancelacion de pedidos, gestion de alertas, proceso de pago individual y grupal |
+| **Cocina / Bar** | Kitchen Display System (KDS) con actualizacion cada 3 s, filtrado por area (cocina / bar), marcado de items como listos |
+| **Gerente** | Dashboard operacional, floor plan, CRUD de productos/categorias/modificadores/promociones, gestion de mesas y empleados, reportes, log de auditoria, configuracion del sistema |
+| **QR por mesa** | Cada mesa tiene un codigo QR unico generado automaticamente que lleva al cliente directamente a su sesion |
+| **Sesiones con PIN** | El cliente crea una sesion, obtiene su PIN y puede recuperarla desde otro dispositivo en la misma mesa |
+| **Modificadores** | Grupos de opciones (unica / multiple) configurables por producto con precio extra y snapshots historicos |
+| **Promociones** | Descuentos por porcentaje, monto fijo, 2x1, combo precio fijo y "lleva X paga Y"; aplicables por item o sobre el total del carrito |
+| **Auditoria** | Registro inmutable de acciones criticas: pagos, cancelaciones y cierres de mesa |
+
+---
+
+## Arquitectura del sistema
+
+```
+                         [ Navegador / Dispositivo ]
+                                     |
+              ┌──────────────────────┼──────────────────────┐
+              |                      |                      |
+         [Cliente]             [Mesero / KDS]          [Gerente]
+         QR → sesion           login por rol           login por rol
+         menu / carrito        mapa de mesas           dashboard
+         pedidos propios       alertas / cobros        CRUD / reportes
+              |                      |                      |
+              └──────────────────────┼──────────────────────┘
+                                     |
+                            [ Django 5 / WSGI ]
+                                     |
+                    ┌────────────────┼────────────────┐
+                    |                |                |
+              apps/cliente    apps/mesero       apps/gerente
+              apps/cocina     apps/pedidos      apps/auditoria
+              apps/mesas      apps/menu         apps/accounts
+                    |                |                |
+                    └────────────────┼────────────────┘
+                                     |
+                          [ MariaDB 10.6 (Docker) ]
+```
+
+> La comunicacion en tiempo real se implementa mediante **polling HTTP cada 3 segundos** desde el frontend (KDS y mapa de mesas). No se utilizan WebSockets.
+
+---
+
+## Modulos
 
 <details>
-<summary><strong>🧑‍💻 Aplicación Cliente (móvil)</strong></summary>
+<summary><strong>Cliente</strong> — Experiencia de mesa</summary>
 
-<br/>
+El modulo cliente es la interfaz publica accesible desde el QR de cada mesa. No requiere autenticacion de empleado; la identidad del comensal se gestiona mediante una sesion anonima con alias y PIN.
 
-- **Acceso**: QR → alias → PIN generado o recuperación de sesión existente
-- **Menú**: Categorías, productos con modificadores y notas especiales
-- **Carrito**: Resumen, ajuste de cantidades y envío a cocina
-- **Seguimiento**: Estado de pedidos activos en tiempo real
-- **Acciones**: Solicitud de ayuda y petición de cuenta al mesero
+**Flujo principal:**
+
+1. El cliente escanea el QR de su mesa y accede a `/bienvenida/`.
+2. Crea una sesion eligiendo un alias (o recupera una sesion existente con su PIN).
+3. Navega por el menu, agrega productos al carrito con sus modificadores.
+4. Confirma el pedido; este pasa al KDS de cocina/bar.
+5. Monitorea el estado de sus pedidos en `/pedidos/`.
+6. Solicita la cuenta o ayuda del mesero cuando lo necesita.
+
+**Vistas principales:** `bienvenida`, `crear_sesion`, `recuperar_sesion`, `menu`, `carrito`, `confirmar_pedido`, `pedidos`, `solicitar_cuenta`, `solicitar_ayuda`
+
+**Middleware:** `ClienteSessionMiddleware` carga automaticamente la sesion activa (o pagada) del cliente en cada request.
 
 </details>
 
 <details>
-<summary><strong>🧑‍🍳 Panel de Mesero</strong></summary>
+<summary><strong>Mesero</strong> — Gestion de sala</summary>
 
-<br/>
+Interfaz de uso exclusivo del personal de sala. Requiere autenticacion con rol `mesero`.
 
-- **Mapa de mesas**: Vista en tiempo real (libre / ocupada / con pedidos / pagando)
-- **Panel de mesa**: PIN visible, sesiones activas, pedidos y solicitudes
-- **Pedido asistido**: Modal para agregar productos en nombre de un cliente
-- **Procesamiento de pago**: Efectivo / tarjeta / mixto con cálculo de cambio
-- **Cierre de mesa**: Libera la mesa e invalida el PIN automáticamente
+**Funcionalidades:**
 
-</details>
+- Mapa de mesas con estado en tiempo real (libre / ocupada) mediante polling.
+- Vista de detalle por mesa: sesiones activas, pedidos y total acumulado.
+- Pedidos asistidos: el mesero puede ordenar directamente en nombre del cliente.
+- Gestion de alertas: ayuda solicitada por clientes y solicitudes de cuenta.
+- Flujo de pago: individual (por sesion) o grupal (toda la mesa), seleccion de metodo de pago.
+- Cancelacion de pedidos con motivo.
+- Cierre de mesa al finalizar el servicio.
 
-<details>
-<summary><strong>🍳 Monitor de Cocina — KDS</strong></summary>
-
-<br/>
-
-- **Pedidos pendientes**: Orden FIFO con semáforo de tiempos configurable
-- **Botón "Listo"**: Mueve el pedido a la columna de entregados con un solo toque
-- **Filtrado por área**: Cocina (alimentos) y bar (bebidas) en vistas separadas
+**Vistas principales:** `mapa_mesas`, `detalle_mesa`, `pedido_asistido`, `alertas`, `cuentas`, `pago`, `procesar_pago`, `cerrar_mesa`
 
 </details>
 
 <details>
-<summary><strong>💼 Panel de Gerente</strong></summary>
+<summary><strong>Cocina / Bar</strong> — Kitchen Display System</summary>
 
-<br/>
+Pantalla de produccion para el personal de cocina y bar. Requiere autenticacion con rol `cocina`.
 
-- **Gestión de menú**: CRUD de categorías, productos, modificadores y promociones
-- **Gestión de mesas**: Alta, edición, desactivación y generación de QR
-- **Gestión de empleados**: Creación de usuarios con roles (mesero / gerente / admin)
-- **Reportes**: Ventas por período, productos más vendidos, afluencia, tiempos de servicio, promociones aplicadas y auditoría de cancelaciones
-- **Configuración**: Modo mantenimiento y umbrales del semáforo KDS
+**Funcionalidades:**
+
+- KDS con lista de pedidos pendientes y en preparacion.
+- Filtrado automatico por area: un usuario de cocina ve solo items de categoria `cocina`; uno de bar ve solo items de categoria `bar`.
+- Actualizacion automatica cada 3 segundos via endpoint `/cocina/pedidos-json/`.
+- Marcado de items como listos con un solo click.
+
+**Vistas principales:** `kds`, `pedidos_json`, `marcar_listo`
+
+</details>
+
+<details>
+<summary><strong>Gerente</strong> — Administracion y reportes</summary>
+
+Panel completo de administracion. Requiere autenticacion con rol `gerente` o `admin`.
+
+**Funcionalidades:**
+
+- **Dashboard:** resumen operacional del dia con estadisticas en tiempo real.
+- **Floor plan:** vista de sala con estado de mesas y acceso rapido a detalles.
+- **Catalogo de menu:** CRUD de productos, categorias (con asignacion de area cocina/bar), grupos de modificadores (con soporte de plantillas reutilizables) y promociones.
+- **Gestion de mesas:** CRUD de mesas y ubicaciones, asignacion de mesero por mesa.
+- **Empleados:** alta, baja logica (toggle activo) y edicion de personal por rol.
+- **Reportes:** filtrado por rango de fechas, reportes quincenales y exportacion.
+- **Auditoria:** log de acciones criticas con filtros.
+- **Configuracion:** pares clave-valor para parametros globales del sistema.
+
+**Vistas principales:** `dashboard`, `floor_plan`, `productos`, `categorias`, `modificadores`, `promociones`, `mesas`, `empleados`, `reportes`, `auditoria`, `configuracion`
 
 </details>
 
 ---
 
-## 🧪 Rutas para Testing Manual
+## Rutas para testing manual
 
-### 🔓 Públicas (sin login)
+### Publicas
 
-| URL | Descripción |
-|-----|-------------|
-| `/` | Redirige a `/bienvenida/` |
-| `/bienvenida/` | Pantalla inicial para ingresar PIN o crear sesión |
-| `/bienvenida/crear/<mesa_id>/` | Crear nueva sesión en una mesa |
-| `/bienvenida/recuperar/<mesa_id>/` | Recuperar sesión existente con PIN |
-| `/bienvenida/pin/` | Muestra el PIN de la sesión actual |
-| `/bienvenida/estado/<mesa_id>/` | (JSON) Estado de mesa (incluye PIN y sesiones activas) |
-| `/accounts/login/` | Login genérico (staff) |
-| `/admin/` | Panel de administración de Django |
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| GET | `/` | Redirige a `/bienvenida/` |
+| GET | `/bienvenida/` | Pantalla de bienvenida de mesa |
+| GET | `/mantenimiento/` | Pagina de mantenimiento |
+| GET | `/admin/` | Django Admin |
+| GET/POST | `/accounts/login/` | Login generico |
 
-### 🧑‍💻 Cliente (móvil)
+### Cliente
 
-| URL | Descripción |
-|-----|-------------|
-| `/menu/` | Menú digital |
-| `/carrito/` | Ver carrito actual |
-| `/carrito/agregar/` | POST para agregar producto |
-| `/carrito/actualizar/` | POST para modificar cantidad |
-| `/carrito/eliminar/` | POST para quitar ítem |
-| `/carrito/limpiar/` | POST para vaciar carrito |
-| `/carrito/confirmar/` | POST para enviar pedido a cocina |
-| `/pedidos/` | Ver pedidos activos de la sesión |
-| `/pedidos/estado/` | (JSON) Estado de pedidos |
-| `/pedidos/ayuda/` | POST para llamar al mesero |
-| `/pedidos/cuenta/` | POST para pedir la cuenta |
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| POST | `/bienvenida/crear/<mesa_id>/` | Crear sesion de cliente |
+| POST | `/bienvenida/recuperar/<mesa_id>/` | Recuperar sesion con PIN |
+| GET | `/bienvenida/pin/` | Mostrar PIN generado |
+| GET | `/bienvenida/estado/<mesa_id>/` | Estado actual de la mesa |
+| GET | `/menu/` | Menu digital |
+| GET | `/carrito/` | Ver carrito |
+| POST | `/carrito/agregar/` | Agregar producto al carrito |
+| POST | `/carrito/actualizar/` | Cambiar cantidad de un item |
+| POST | `/carrito/eliminar/` | Eliminar item del carrito |
+| POST | `/carrito/limpiar/` | Vaciar carrito |
+| POST | `/carrito/confirmar/` | Confirmar pedido |
+| POST | `/carrito/calcular/` | Calcular totales y promociones |
+| GET | `/pedidos/` | Mis pedidos |
+| GET | `/pedidos/estado/` | Estado de pedidos (polling) |
+| POST | `/pedidos/ayuda/` | Solicitar ayuda al mesero |
+| POST | `/pedidos/cuenta/` | Solicitar la cuenta |
 
-### 🧑‍🍳 Mesero (requiere login)
+### Mesero
 
-| URL | Descripción |
-|-----|-------------|
-| `/mesero/login/` | Login de mesero |
-| `/mesero/logout/` | Cerrar sesión |
-| `/mesero/mapa/` | Mapa de mesas (vista principal) |
-| `/mesero/mapa/estado/` | (JSON) Estado de todas las mesas |
-| `/mesero/mapa/<mesa_id>/` | Detalle de una mesa |
-| `/mesero/pedidos-listos/` | Pedidos listos para entregar |
-| `/mesero/pedidos/entregar/` | POST para marcar pedido como entregado |
-| `/mesero/sesion/cerrar/` | POST para cerrar una sesión de cliente |
-| `/mesero/mesa/cerrar/` | POST para cerrar mesa completa |
-| `/mesero/asistido/` | Tomar pedido asistido |
-| `/mesero/asistido/confirmar/` | POST para confirmar pedido asistido |
-| `/mesero/alertas/` | Alertas de ayuda y solicitudes de cuenta |
-| `/mesero/cuentas/` | Solicitudes de pago pendientes |
-| `/mesero/pago/` | Vista de procesamiento de pago |
-| `/mesero/pago/procesar/` | POST para marcar pago como realizado |
-| `/mesero/mesas/` | Alias de `/mesero/mapa/` |
-| `/mesero/productos/json/` | (JSON) Lista de productos para pedido asistido |
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| GET/POST | `/mesero/login/` | Login mesero |
+| GET | `/mesero/logout/` | Logout |
+| GET | `/mesero/mapa/` | Mapa de mesas |
+| GET | `/mesero/mapa/estado/` | Estado de mesas (polling JSON) |
+| GET | `/mesero/mapa/<mesa_id>/` | Detalle de mesa |
+| GET | `/mesero/pedidos-listos/` | Pedidos listos para entregar |
+| POST | `/mesero/pedidos/entregar/` | Marcar pedido como entregado |
+| POST | `/mesero/pedidos/cancelar/` | Cancelar pedido |
+| GET/POST | `/mesero/pedidos/<id>/editar/` | Editar pedido |
+| GET | `/mesero/alertas/` | Ver alertas activas |
+| POST | `/mesero/alertas/atender/` | Marcar alerta como atendida |
+| GET | `/mesero/cuentas/` | Solicitudes de pago pendientes |
+| POST | `/mesero/cuentas/solicitar/` | Emitir solicitud de pago |
+| POST | `/mesero/cuentas/cancelar/` | Cancelar solicitud de pago |
+| GET/POST | `/mesero/asistido/` | Crear pedido asistido |
+| POST | `/mesero/asistido/confirmar/` | Confirmar pedido asistido |
+| POST | `/mesero/sesion/agregar/` | Agregar sesion asistida a mesa |
+| POST | `/mesero/sesion/cerrar/` | Cerrar sesion de cliente |
+| POST | `/mesero/mesa/cerrar/` | Cerrar mesa |
+| GET | `/mesero/pago/` | Pantalla de pago |
+| POST | `/mesero/pago/procesar/` | Procesar pago |
+| GET | `/mesero/productos/json/` | Catalogo de productos (JSON) |
 
-### 🍳 Cocina (requiere login)
+### Cocina
 
-| URL | Descripción |
-|-----|-------------|
-| `/cocina/login/` | Login de cocina |
-| `/cocina/logout/` | Cerrar sesión |
-| `/cocina/kds/` | Pantalla KDS |
-| `/cocina/pedidos-json/` | (JSON) Pedidos pendientes y en preparación |
-| `/cocina/marcar-listo/` | POST para marcar pedido como listo |
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| GET/POST | `/cocina/login/` | Login cocina/bar |
+| GET | `/cocina/logout/` | Logout |
+| GET | `/cocina/kds/` | Kitchen Display System |
+| GET | `/cocina/pedidos-json/` | Pedidos activos (polling JSON) |
+| POST | `/cocina/marcar-listo/` | Marcar item como listo |
 
-### 💼 Gerente (requiere login)
+### Gerente
 
-| URL | Descripción |
-|-----|-------------|
-| `/gerente/login/` | Login de gerente |
-| `/gerente/logout/` | Cerrar sesión |
-| `/gerente/dashboard/` | Panel principal |
-| `/gerente/floor-plan/` | Plano de mesas (solo lectura) |
-| `/gerente/floor-plan/estado/` | (JSON) Estado de mesas |
-| `/gerente/floor-plan/mesa/<mesa_id>/` | Detalle de mesa |
-| `/gerente/pedidos/cancelar/` | POST para cancelar un pedido |
-| `/gerente/menu/` | Gestión de productos |
-| `/gerente/menu/productos/` | (alias) Gestión de productos |
-| `/gerente/menu/productos/nuevo/` | Nuevo producto |
-| `/gerente/menu/productos/<id>/editar/` | Editar producto |
-| `/gerente/menu/productos/<id>/eliminar/` | POST para eliminar producto |
-| `/gerente/menu/categorias/` | Gestión de categorías |
-| `/gerente/menu/categorias/<id>/eliminar/` | POST para eliminar categoría |
-| `/gerente/menu/modificadores/` | Gestión de modificadores |
-| `/gerente/menu/modificadores/crear/` | POST para crear modificador |
-| `/gerente/menu/modificadores/<id>/eliminar/` | POST para eliminar modificador |
-| `/gerente/menu/promociones/` | Gestión de promociones |
-| `/gerente/menu/promociones/<id>/toggle/` | POST para activar/desactivar promoción |
-| `/gerente/menu/promociones/<id>/eliminar/` | POST para eliminar promoción |
-| `/gerente/mesas/` | Gestión de mesas |
-| `/gerente/mesas/crud/` | CRUD de mesas (tabla/API) |
-| `/gerente/mesas/<id>/eliminar/` | POST para eliminar mesa |
-| `/gerente/mesas/<mesa_id>/asignar/` | POST para asignar mesero |
-| `/gerente/empleados/` | Gestión de empleados |
-| `/gerente/empleados/nuevo/` | Nuevo empleado |
-| `/gerente/empleados/<id>/toggle/` | POST para activar/desactivar empleado |
-| `/gerente/empleados/<id>/editar/` | Editar empleado |
-| `/gerente/reportes/` | Reportes de ventas |
-| `/gerente/auditoria/` | Registro de auditoría |
-| `/gerente/stats/` | (JSON) Estadísticas para reportes |
-| `/gerente/configuracion/` | Configuración general |
-| `/gerente/menu/mesas/` | Alias de `/gerente/mesas/crud/` |
-| `/gerente/menu/empleados/` | Alias de `/gerente/empleados/` |
-
----
-
-## 🗃️ Modelo de datos
-
-| Tabla | Descripción |
-|---|---|
-| `Empleado` | Personal del sistema con roles y credenciales (hereda de `AbstractBaseUser`) |
-| `Mesa` | Mesas físicas, QR, PIN dinámico y estado |
-| `SesionCliente` | Sesión de cada comensal (alias, token, estado) |
-| `Producto` / `Categoria` | Catálogo del menú |
-| `GrupoModificador` / `OpcionModificador` | Personalizaciones por producto |
-| `Promocion` / `TipoPromocion` | Descuentos y ofertas activas |
-| `Pedido` / `DetallePedido` / `DetalleModificador` | Registro completo de pedidos |
-| `SolicitudPago` | Solicitudes de cuenta individuales o grupales |
-| `Auditoria` | Registro de acciones críticas del sistema |
-
-> El esquema completo con relaciones y restricciones está definido en los modelos de Django (`models.py` de cada app).
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| GET/POST | `/gerente/login/` | Login gerente |
+| GET | `/gerente/logout/` | Logout |
+| GET | `/gerente/dashboard/` | Dashboard operacional |
+| GET | `/gerente/floor-plan/` | Vista de sala |
+| GET | `/gerente/floor-plan/estado/` | Estado de mesas (JSON) |
+| GET | `/gerente/floor-plan/mesa/<id>/` | Detalle de mesa |
+| GET/POST | `/gerente/menu/productos/` | Listado y creacion de productos |
+| GET/POST | `/gerente/menu/productos/<id>/editar/` | Editar producto |
+| POST | `/gerente/menu/productos/<id>/eliminar/` | Eliminar producto |
+| GET/POST | `/gerente/menu/categorias/` | Gestion de categorias |
+| POST | `/gerente/menu/categorias/<id>/eliminar/` | Eliminar categoria |
+| GET/POST | `/gerente/menu/modificadores/` | Gestion de modificadores |
+| POST | `/gerente/menu/modificadores/crear/` | Crear modificador |
+| POST | `/gerente/menu/modificadores/clonar/` | Clonar plantilla |
+| GET/POST | `/gerente/menu/modificadores/<id>/editar/` | Editar modificador |
+| POST | `/gerente/menu/modificadores/<id>/eliminar/` | Eliminar modificador |
+| POST | `/gerente/menu/modificadores/<id>/plantilla/` | Toggle plantilla reutilizable |
+| GET/POST | `/gerente/menu/promociones/` | Gestion de promociones |
+| POST | `/gerente/menu/promociones/<id>/toggle/` | Activar/desactivar promocion |
+| GET/POST | `/gerente/menu/promociones/<id>/editar/` | Editar promocion |
+| POST | `/gerente/menu/promociones/<id>/eliminar/` | Eliminar promocion |
+| GET/POST | `/gerente/mesas/` | Gestion de mesas |
+| POST | `/gerente/mesas/crud/` | CRUD de mesas |
+| POST | `/gerente/mesas/ubicacion/crear/` | Crear ubicacion |
+| POST | `/gerente/mesas/ubicacion/<id>/editar/` | Editar ubicacion |
+| POST | `/gerente/mesas/ubicacion/<id>/eliminar/` | Eliminar ubicacion |
+| POST | `/gerente/mesas/<id>/eliminar/` | Eliminar mesa |
+| POST | `/gerente/mesas/<id>/asignar/` | Asignar mesero a mesa |
+| GET/POST | `/gerente/empleados/` | Listado de empleados |
+| POST | `/gerente/empleados/nuevo/` | Crear empleado |
+| POST | `/gerente/empleados/<id>/toggle/` | Activar/desactivar empleado |
+| GET/POST | `/gerente/empleados/<id>/editar/` | Editar empleado |
+| GET | `/gerente/reportes/` | Reportes por fecha |
+| GET | `/gerente/reportes/exportar/` | Exportar reporte |
+| GET | `/gerente/reportes/quincenales/` | Reportes quincenales |
+| GET | `/gerente/auditoria/` | Log de auditoria |
+| GET | `/gerente/stats/` | Estadisticas JSON (dashboard) |
+| GET/POST | `/gerente/configuracion/` | Configuracion del sistema |
 
 ---
 
-## 🚀 Tecnologías utilizadas
+## Modelo de datos
 
-| Categoría | Tecnología |
-|-----------|------------|
-| **Backend** | Django 5.0 (Python 3.11) |
-| **Base de datos** | MySQL 8 / MariaDB |
-| **Frontend** | Django Templates, Bootstrap 5, Bootstrap Icons |
-| **Estilos** | CSS personalizado (variables, diseño responsive) |
-| **JavaScript** | Vanilla JS (fetch, polling, manipulación del DOM) |
-| **Gráficas** | Chart.js 4 (solo en panel de reportes) |
-| **Servidor** | Gunicorn + Nginx (producción) |
+| Entidad | App | Descripcion |
+|---------|-----|-------------|
+| `Empleado` | accounts | Usuario del sistema. Roles: `mesero`, `cocina`, `gerente`, `admin`. Extiende `AbstractBaseUser`. |
+| `UbicacionMesa` | mesas | Zona o area de la sala (ej. TERRAZA, INTERIOR). |
+| `Mesa` | mesas | Mesa fisica con numero, capacidad, QR unico y PIN temporal. |
+| `SesionCliente` | mesas | Sesion anonima de un comensal en una mesa. Estados: `activa`, `pagada`, `cerrada`. |
+| `AlertaMesero` | mesas | Alerta generada por el cliente: ayuda, solicitud de cuenta o personalizada. |
+| `Categoria` | menu | Categoria de producto con asignacion de area (`cocina`, `bar`, `ambos`). |
+| `Producto` | menu | Item del menu con precio, disponibilidad y URL de imagen. |
+| `GrupoModificador` | menu | Grupo de opciones personalizables de un producto (ej. "Tamano", "Leche"). Soporta plantillas reutilizables. |
+| `OpcionModificador` | menu | Opcion concreta dentro de un grupo con precio extra opcional. |
+| `Promocion` | menu | Descuento configurable: porcentaje, monto fijo, 2x1, combo o "lleva X paga Y". |
+| `Pedido` | pedidos | Orden completa de una sesion. Estados: `recibido`, `preparando`, `listo`, `entregado`, `cancelado`. |
+| `DetallePedido` | pedidos | Linea de un pedido: producto, cantidad, subtotal y promocion aplicada. |
+| `DetalleModificador` | pedidos | Modificador aplicado a un detalle; conserva snapshot historico del nombre de la opcion. |
+| `SolicitudPago` | pedidos | Solicitud de cobro individual o grupal con metodo de pago y propina sugerida. |
+| `MetodoPago` | catalogs | Catalogo de metodos de pago (efectivo, tarjeta, mixto). |
+| `ModalidadIngreso` | catalogs | Catalogo de formas de ingreso (QR, asistido por mesero). |
+| `EstadoSolicitud` | catalogs | Catalogo de estados de una solicitud de pago (pendiente, procesada, cancelada). |
+| `Configuracion` | gerente | Pares clave-valor para parametros globales del sistema. |
+| `Auditoria` | auditoria | Registro de acciones criticas con referencia a empleado, mesa, pedido o solicitud de pago. |
 
 ---
 
-## 📁 Estructura del proyecto
+## Tecnologias utilizadas
+
+| Tecnologia | Version | Uso |
+|-----------|---------|-----|
+| Python | 3.11 | Lenguaje base |
+| Django | 5.0.2 | Framework web |
+| MariaDB | 10.6 | Base de datos relacional |
+| mysqlclient | 2.2.4 | Conector Django-MariaDB |
+| Bootstrap | 5 | Componentes UI y sistema de grilla |
+| Bootstrap Icons | 1.11.3 | Iconografia (CDN) |
+| JavaScript | ES6 | Interactividad y polling frontend |
+| Docker | — | Contenedorizacion del entorno de desarrollo |
+| Docker Compose | — | Orquestacion de servicios (web + db) |
+| qrcode[pil] | 7.4.2 | Generacion de codigos QR para mesas |
+| python-decouple | 3.8 | Gestion de variables de entorno |
+
+---
+
+## Estructura del proyecto
 
 ```
 mochi-matcha/
-├── apps/                         # Todas las aplicaciones Django
-│   ├── accounts/                 # Modelo Empleado, autenticación, decoradores
-│   ├── auditoria/                # Registro de acciones críticas
-│   ├── catalogs/                 # Catálogos simples (ModalidadIngreso, MetodoPago, etc.)
-│   ├── cliente/                  # Vistas y templates del módulo cliente (móvil)
-│   ├── cocina/                   # Vistas y templates del módulo cocina (KDS)
-│   ├── gerente/                  # Vistas y templates del módulo gerente/admin
-│   ├── menu/                     # Productos, Categorías, Modificadores, Promociones
-│   ├── mesas/                    # Modelos Mesa y SesionCliente
-│   ├── mesero/                   # Vistas y templates del módulo mesero
-│   └── pedidos/                  # Pedido, DetallePedido, SolicitudPago
-├── config/                       # Configuración de Django (settings, urls raíz, wsgi, asgi)
-├── static/                       # CSS y JS globales (mochi.css, staff.css, cliente.css)
-├── templates/                    # Plantillas base (base/*.html)
-│   └── base/
-│       ├── cliente_base.html
-│       ├── login.html
-│       └── staff_base.html
+├── apps/
+│   ├── accounts/          # Autenticacion y modelo Empleado
+│   ├── auditoria/         # Log de acciones criticas
+│   ├── catalogs/          # Catalogos auxiliares (MetodoPago, ModalidadIngreso, EstadoSolicitud)
+│   ├── cliente/           # Modulo cliente: menu, carrito, sesiones, pedidos
+│   │   └── middleware.py  # ClienteSessionMiddleware
+│   ├── cocina/            # KDS (Kitchen Display System)
+│   ├── gerente/           # Dashboard, CRUD, reportes, configuracion
+│   ├── menu/              # Productos, categorias, modificadores, promociones
+│   ├── mesas/             # Mesas, sesiones de cliente, alertas de mesero
+│   ├── mesero/            # Mapa de mesas, pedidos asistidos, cobros
+│   └── pedidos/           # Pedidos, detalles, modificadores aplicados, solicitudes de pago
+│       └── utils.py       # Logica de promociones
+├── config/
+│   ├── settings.py
+│   ├── urls.py
+│   ├── wsgi.py
+│   └── asgi.py
+├── static/
+│   └── css/
+│       ├── cliente.css
+│       ├── mochi.css
+│       └── staff.css
+├── templates/
+│   ├── base/
+│   │   ├── cliente_base.html
+│   │   ├── staff_base.html
+│   │   └── login.html
+│   └── mantenimiento.html
 ├── docker-compose.yml
 ├── Dockerfile
 ├── manage.py
 ├── requirements.txt
-└── README.md
+├── seed.py
+└── env.example
 ```
 
 ---
 
 <div align="center">
 
-**Mochi Matcha** — Pensado para mejorar la experiencia del cliente y optimizar la operación del restaurante. 🍵
+Mochi Matcha &nbsp;&middot;&nbsp; bi-cup-hot
 
 </div>
