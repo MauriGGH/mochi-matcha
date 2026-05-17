@@ -1,3 +1,8 @@
+"""
+Panel de administración (rol gerente/admin) de Mochi Matcha.
+Incluye: autenticación, floor plan, CRUD de menú/empleados/mesas,
+reportes avanzados con exportación a Excel/PDF y gestión de imágenes.
+"""
 import json
 import logging
 
@@ -6,13 +11,15 @@ from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.cache import never_cache
 from django.utils import timezone
 from datetime import timedelta
 from django.db import transaction
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate, Coalesce
 from django.db.models import DecimalField
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 
 from apps.accounts.decorators import gerente_requerido
@@ -25,14 +32,22 @@ from apps.catalogs.models import MetodoPago, EstadoSolicitud
 from apps.gerente.models import Configuracion
 
 
+@never_cache
+@ensure_csrf_cookie
 def login_gerente(request):
+    """Muestra y procesa el formulario de login exclusivo para gerente/admin.
+
+    GET:  renderiza el formulario.
+    POST: autentica al usuario; solo admite roles "gerente" y "admin".
+    Redirige al dashboard si ya está autenticado con el rol correcto.
+    """
     if request.user.is_authenticated and request.user.rol in ("gerente", "admin"):
         return redirect("gerente:dashboard")
     error = None
     if request.method == "POST":
         usuario = request.POST.get("usuario", "")
         contrasena = request.POST.get("contrasena", "")
-        user = authenticate(request, username=usuario, password=contrasena)
+        user = authenticate(request, usuario=usuario, password=contrasena)
         if user and user.rol in ("gerente", "admin") and user.is_active:
             login(request, user)
             return redirect("gerente:dashboard")
@@ -45,6 +60,7 @@ def login_gerente(request):
 
 
 def logout_gerente(request):
+    """Cierra la sesión del gerente y redirige al login."""
     logout(request)
     return redirect("gerente:login_gerente")
 
@@ -52,12 +68,20 @@ def logout_gerente(request):
 # ─── Dashboard / Floor Plan ───────────────────────────────────────────────────
 
 @gerente_requerido
+@ensure_csrf_cookie
 def dashboard(request):
+    """Punto de entrada del panel; redirige directamente al floor plan."""
     return redirect("gerente:floor_plan")
 
 
 @gerente_requerido
+@ensure_csrf_cookie
 def floor_plan(request):
+    """Renderiza el plano del restaurante con el estado inicial de todas las mesas.
+
+    Los contadores de listos y solicitudes se muestran en la barra superior
+    y se actualizan en tiempo real por mesas_estado() vía polling JS.
+    """
     mesas = Mesa.objects.prefetch_related("sesiones__pedidos").order_by("numero_mesa")
     listos_count = Pedido.objects.filter(estado="listo").count()
     solicitudes_count = SolicitudPago.objects.filter(
@@ -73,6 +97,10 @@ def floor_plan(request):
 @require_GET
 @gerente_requerido
 def stats_json(request):
+    """Devuelve KPIs del día en JSON para el widget de estadísticas del dashboard.
+
+    Retorna: ventas_hoy, pedidos_hoy, mesas_ocupadas, listos_count, solicitudes_count.
+    """
     hoy = timezone.now().date()
     pedidos_hoy = Pedido.objects.filter(fecha_hora_ingreso__date=hoy).exclude(estado="cancelado")
 
@@ -100,6 +128,13 @@ def stats_json(request):
 @require_GET
 @gerente_requerido
 def detalle_mesa(request, mesa_id):
+    """Devuelve JSON con el detalle completo de una mesa: sesiones activas, pedidos y solicitudes.
+
+    Parámetros URL:
+        mesa_id: PK de la Mesa.
+    Retorna JSON con: ok, mesa_id, numero_mesa, pin, estado, mesa_libre,
+        sesiones (lista con pedidos e ítems), solicitudes pendientes y total_mesa.
+    """
     mesa = get_object_or_404(Mesa, pk=mesa_id)
     sesiones = mesa.sesiones.filter(estado="activa").order_by("fecha_inicio")
     sesiones_data = []
@@ -145,6 +180,8 @@ def detalle_mesa(request, mesa_id):
                 "tipo_display": sol.get_tipo_display(),
                 "total": float(sol.total_mesa or sol.total_individual or 0),
                 "fecha": sol.fecha_hora.strftime("%H:%M"),
+                "sesion_id": s.pk,
+                "metodo_pref": sol.detalle_pago or "",
             })
 
     total_mesa = sum(s["total"] for s in sesiones_data)
@@ -265,12 +302,15 @@ def mesas_estado(request):
     mesas = Mesa.objects.prefetch_related(
         "sesiones__pedidos",
         "sesiones__solicitudes_pago__estado_solicitud",
+        "alertas",
     ).order_by("numero_mesa")
 
+    from apps.mesas.models import AlertaMesero
     listos_count = Pedido.objects.filter(estado="listo").count()
     solicitudes_count = SolicitudPago.objects.filter(
         estado_solicitud__descripcion="pendiente"
     ).count()
+    alertas_count = AlertaMesero.objects.filter(atendida=False).count()
 
     data = []
     for m in mesas:
@@ -278,6 +318,7 @@ def mesas_estado(request):
         pedidos_cocina = 0
         pedidos_listos = 0
         tiene_solicitud = False
+        tiene_alerta = any(not a.atendida for a in m.alertas.all())
 
         for s in sesiones_activas:
             for p in s.pedidos.all():
@@ -292,6 +333,8 @@ def mesas_estado(request):
 
         if m.estado == "libre":
             estado_visual = "libre"
+        elif tiene_alerta:
+            estado_visual = "alerta"
         elif tiene_solicitud:
             estado_visual = "cobrando"
         elif pedidos_listos > 0:
@@ -311,21 +354,29 @@ def mesas_estado(request):
             "pedidos_cocina": pedidos_cocina,
             "pedidos_listos": pedidos_listos,
             "tiene_solicitud": tiene_solicitud,
+            "tiene_alerta": tiene_alerta,
         })
     return JsonResponse({
         "ok": True, "mesas": data,
         "listos_count": listos_count,
         "solicitudes_count": solicitudes_count,
+        "alertas_count": alertas_count,
     })
 
 
 @gerente_requerido
 def mesas(request):
+    """Alias de compatibilidad; redirige al CRUD de mesas."""
     return redirect("gerente:mesas_crud")
 
 
 @gerente_requerido
 def mesas_crud(request):
+    """Lista todas las mesas con su QR y permite crear nuevas.
+
+    POST: crea una mesa con número único y QR generado automáticamente.
+    GET:  renderiza la vista de gestión con QR en base64 para cada mesa.
+    """
     if request.method == "POST":
         numero = request.POST.get("numero_mesa")
         capacidad = request.POST.get("capacidad", 4)
@@ -340,12 +391,51 @@ def mesas_crud(request):
         return redirect("gerente:mesas_crud")
 
     all_mesas = Mesa.objects.select_related("ubicacion").order_by("numero_mesa")
+    # QR generado con el dominio REAL del request — funciona en producción al
+    # cambiar de dominio sin tener que reconfigurar SITE_BASE_URL.
+    qr_base_url = request.build_absolute_uri("/").rstrip("/")
+    for mesa in all_mesas:
+        mesa.qr_img = mesa.generate_qr_base64(qr_base_url)
     meseros = Empleado.objects.filter(rol="mesero", activo=True)
     ubicaciones = UbicacionMesa.objects.order_by("nombre")
     return render(request, "gerente/menu_manager.html", {
         "mesas": all_mesas, "meseros": meseros,
         "ubicaciones": ubicaciones, "vista": "mesas"
     })
+
+
+@require_POST
+@gerente_requerido
+def mesa_editar(request, id):
+    """Edita número, capacidad y ubicación de una mesa existente."""
+    mesa = get_object_or_404(Mesa, pk=id)
+    numero       = request.POST.get("numero_mesa")
+    capacidad    = request.POST.get("capacidad")
+    ubicacion_id = request.POST.get("ubicacion_id") or None
+
+    if numero:
+        try:
+            numero_int = int(numero)
+        except (TypeError, ValueError):
+            messages.error(request, "El número de mesa no es válido.")
+            return redirect("gerente:mesas_crud")
+        # El número de mesa es único: bloquear colisiones con otra mesa.
+        if Mesa.objects.exclude(pk=mesa.pk).filter(numero_mesa=numero_int).exists():
+            messages.error(request, f"Ya existe otra mesa con el número {numero_int}.")
+            return redirect("gerente:mesas_crud")
+        mesa.numero_mesa = numero_int
+
+    if capacidad:
+        try:
+            mesa.capacidad = max(1, int(capacidad))
+        except (TypeError, ValueError):
+            messages.error(request, "La capacidad no es válida.")
+            return redirect("gerente:mesas_crud")
+
+    mesa.ubicacion = UbicacionMesa.objects.filter(pk=ubicacion_id).first() if ubicacion_id else None
+    mesa.save(update_fields=["numero_mesa", "capacidad", "ubicacion"])
+    messages.success(request, f"Mesa {mesa.numero_mesa} actualizada.")
+    return redirect("gerente:mesas_crud")
 
 
 @require_POST
@@ -397,15 +487,25 @@ def ubicacion_eliminar(request, id):
 @require_POST
 @gerente_requerido
 def mesa_eliminar(request, id):
-    mesa = get_object_or_404(Mesa, pk=id)
-    if mesa.estado == "libre":
-        mesa.delete()
+    # P8: bloquear la mesa y re-validar su estado dentro de la transacción —
+    # evita borrar una mesa que justo pasó a "ocupada" en otra request.
+    with transaction.atomic():
+        mesa = get_object_or_404(Mesa.objects.select_for_update(), pk=id)
+        if mesa.estado == "libre" and not mesa.sesiones.filter(estado="activa").exists():
+            mesa.delete()
+        else:
+            messages.error(request, f"No se puede eliminar la Mesa {mesa.numero_mesa}: está ocupada.")
     return redirect("gerente:mesas_crud")
 
 
 @require_POST
 @gerente_requerido
 def asignar_mesero(request, mesa_id):
+    """Asigna o desasigna un mesero a una mesa.
+
+    POST form: mesero_id (vacío para desasignar).
+    Solo acepta empleados con rol "mesero".
+    """
     mesa = get_object_or_404(Mesa, pk=mesa_id)
     mesero_id = request.POST.get("mesero_id")
     if mesero_id:
@@ -421,6 +521,7 @@ def asignar_mesero(request, mesa_id):
 
 @gerente_requerido
 def productos(request):
+    """Lista todos los productos ordenados por categoría y nombre."""
     prods = Producto.objects.select_related("categoria").order_by("categoria__orden", "nombre")
     categorias = Categoria.objects.order_by("orden")
     return render(request, "gerente/menu_manager.html", {
@@ -430,6 +531,11 @@ def productos(request):
 
 @gerente_requerido
 def productos_nuevo(request):
+    """Crea un nuevo producto en el menú.
+
+    GET:  muestra el formulario de alta.
+    POST: valida y persiste el nuevo producto.
+    """
     categorias = Categoria.objects.order_by("orden")
     if request.method == "POST":
         nombre = request.POST.get("nombre", "").strip()
@@ -451,6 +557,11 @@ def productos_nuevo(request):
 
 @gerente_requerido
 def producto_editar(request, id):
+    """Edita un producto existente.
+
+    GET:  precarga los datos del producto en el formulario.
+    POST: actualiza nombre, precio, descripción, imagen, disponibilidad y categoría.
+    """
     producto = get_object_or_404(Producto, pk=id)
     categorias = Categoria.objects.order_by("orden")
     if request.method == "POST":
@@ -472,6 +583,10 @@ def producto_editar(request, id):
 @require_POST
 @gerente_requerido
 def producto_eliminar(request, id):
+    """Soft-delete: marca el producto como no disponible en lugar de borrarlo físicamente.
+
+    Preserva la integridad referencial con DetallePedido histórico.
+    """
     producto = get_object_or_404(Producto, pk=id)
     producto.disponible = False
     producto.save(update_fields=["disponible"])
@@ -482,6 +597,11 @@ def producto_eliminar(request, id):
 
 @gerente_requerido
 def categorias(request):
+    """Lista categorías y permite crear nuevas.
+
+    GET:  renderiza la lista de categorías.
+    POST: crea una nueva categoría con nombre, orden y área (cocina/barra/ambos).
+    """
     cats = Categoria.objects.order_by("orden")
     if request.method == "POST":
         nombre = request.POST.get("nombre", "").strip()
@@ -497,7 +617,39 @@ def categorias(request):
 
 @require_POST
 @gerente_requerido
+def categoria_editar(request, id):
+    """Edita nombre, orden y área de una categoría existente."""
+    cat = get_object_or_404(Categoria, pk=id)
+    nombre = request.POST.get("nombre", "").strip()
+    if not nombre:
+        return JsonResponse({"ok": False, "error": "El nombre es obligatorio"}, status=400)
+
+    try:
+        orden = int(request.POST.get("orden", cat.orden))
+    except (TypeError, ValueError):
+        orden = cat.orden
+
+    area = request.POST.get("area", cat.area)
+    if area not in dict(Categoria.AREAS):
+        area = cat.area
+
+    cat.nombre = nombre   # save() del modelo aplica .upper()
+    cat.orden = orden
+    cat.area = area
+    cat.save()
+    return JsonResponse({
+        "ok": True, "id": cat.pk, "nombre": cat.nombre,
+        "orden": cat.orden, "area": cat.area,
+    })
+
+
+@require_POST
+@gerente_requerido
 def categoria_eliminar(request, id):
+    """Elimina una categoría solo si no tiene productos activos asociados.
+
+    Evita dejar productos huérfanos sin categoría visible en el menú.
+    """
     cat = get_object_or_404(Categoria, pk=id)
     if not cat.productos.filter(disponible=True).exists():
         cat.delete()
@@ -509,6 +661,7 @@ def categoria_eliminar(request, id):
 
 @gerente_requerido
 def modificadores(request):
+    """Lista todos los grupos de modificadores y las plantillas disponibles para clonar."""
     grupos = GrupoModificador.objects.prefetch_related("productos", "opciones").order_by("-pk")
     productos_list = Producto.objects.filter(disponible=True).order_by("nombre")
     plantillas = GrupoModificador.objects.filter(es_plantilla=True).prefetch_related("opciones").order_by("-pk")
@@ -521,6 +674,12 @@ def modificadores(request):
 @require_POST
 @gerente_requerido
 def modificador_crear(request):
+    """Crea un GrupoModificador con sus opciones y lo asocia a uno o más productos.
+
+    POST JSON: { nombre_grupo, tipo, es_obligatorio, max_selecciones,
+                 producto_ids[], opciones[{ nombre, precio_extra }] }
+    Retorna JSON {ok, grupo_id}.
+    """
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
@@ -567,6 +726,7 @@ def modificador_crear(request):
 @require_POST
 @gerente_requerido
 def modificador_eliminar(request, id):
+    """Elimina un GrupoModificador y sus opciones si no están protegidas."""
     grupo = get_object_or_404(GrupoModificador, pk=id)
     grupo.delete()
     return JsonResponse({"ok": True})
@@ -729,48 +889,187 @@ def modificador_editar(request, id):
 
 # ─── Promociones ──────────────────────────────────────────────────────────────
 
+def _parse_promo_form(post):
+    """
+    2.1: valida y normaliza el POST del modal de promoción.
+
+    Devuelve (datos, errores). `datos` contiene los valores ya casteados al tipo
+    correcto cuando son válidos. `errores` es una lista de mensajes en español
+    apta para mostrar al gerente vía `messages.error`. El llamador decide si
+    aplicar los cambios.
+
+    Reglas (espejo del modelo Promocion + del validador client-side):
+      - titulo: 3-100 chars (después de strip).
+      - descripcion_corta: hasta 120 chars o vacío.
+      - orden: entero 0-32767.
+      - tipo_descuento_id: requerido, debe existir.
+      - valor_descuento: requerido salvo "2x1"; Decimal con ≤ 2 decimales;
+        "Porcentaje" → 1-100; resto → 0-99999999.99.
+      - cantidad_minima: requerido para "Lleva X paga Y"; entero ≥ 2 y > Y.
+      - fecha_inicio / fecha_fin: requeridos; fin > inicio.
+      - aplicacion: una de las choices del modelo.
+      - imagen_url: hasta 500 chars.
+      - dias_semana: solo "0".."6", CSV ordenado.
+      - requiere_todos_productos: requiere ≥ 2 productos_aplicables.
+    """
+    errs = []
+
+    titulo = (post.get("titulo") or "").strip()
+    if len(titulo) < 3:
+        errs.append("El título debe tener al menos 3 caracteres.")
+    if len(titulo) > 100:
+        errs.append("El título no puede superar 100 caracteres.")
+
+    descripcion_corta = (post.get("descripcion_corta") or "").strip() or None
+    if descripcion_corta and len(descripcion_corta) > 120:
+        errs.append("La descripción corta no puede superar 120 caracteres.")
+
+    try:
+        orden = int(post.get("orden", "0") or "0")
+        if orden < 0 or orden > 32767:
+            errs.append("El orden debe estar entre 0 y 32767.")
+            orden = 0
+    except (ValueError, TypeError):
+        errs.append("El orden debe ser un número entero.")
+        orden = 0
+
+    tipo_descuento_id = post.get("tipo_descuento_id")
+    tipo = None
+    tipo_desc = ""
+    if not tipo_descuento_id:
+        errs.append("Selecciona un tipo de descuento.")
+    else:
+        tipo = TipoDescuento.objects.filter(pk=tipo_descuento_id).first()
+        if not tipo:
+            errs.append("Tipo de descuento inválido.")
+        else:
+            tipo_desc = tipo.descripcion
+
+    aplicacion = post.get("aplicacion", "item")
+    if aplicacion not in {"item", "total", "combo"}:
+        errs.append("Aplicación inválida.")
+        aplicacion = "item"
+
+    # valor_descuento: requerido salvo "2x1".
+    valor_raw = (post.get("valor_descuento") or "").strip()
+    valor_decimal = None
+    if tipo_desc != "2x1":
+        if not valor_raw:
+            errs.append("Ingresa el valor del descuento.")
+        else:
+            try:
+                valor_decimal = Decimal(valor_raw)
+            except (InvalidOperation, ValueError):
+                errs.append("El valor del descuento debe ser un número.")
+            else:
+                if valor_decimal < 0:
+                    errs.append("El valor del descuento no puede ser negativo.")
+                if valor_decimal.as_tuple().exponent < -2:
+                    errs.append("El valor del descuento admite máximo 2 decimales.")
+                if valor_decimal > Decimal("99999999.99"):
+                    errs.append("El valor del descuento excede el máximo permitido.")
+                if tipo_desc == "Porcentaje" and not (Decimal("0") < valor_decimal <= Decimal("100")):
+                    errs.append("El porcentaje debe estar entre 1 y 100.")
+
+    # cantidad_minima: requerido para "Lleva X paga Y".
+    cant_raw = (post.get("cantidad_minima") or "").strip()
+    cantidad_int = None
+    if cant_raw:
+        try:
+            cantidad_int = int(cant_raw)
+            if cantidad_int < 0:
+                errs.append("La cantidad mínima no puede ser negativa.")
+        except (ValueError, TypeError):
+            errs.append("La cantidad mínima debe ser un entero.")
+    if tipo_desc == "Lleva X paga Y":
+        if cantidad_int is None or cantidad_int < 2:
+            errs.append("Para 'Lleva X paga Y' la cantidad llevada (X) debe ser ≥ 2.")
+        if (
+            cantidad_int is not None and valor_decimal is not None
+            and cantidad_int <= valor_decimal
+        ):
+            errs.append("La cantidad llevada (X) debe ser mayor que la pagada (Y).")
+
+    fecha_inicio = post.get("fecha_inicio")
+    fecha_fin    = post.get("fecha_fin")
+    if not fecha_inicio:
+        errs.append("Indica la fecha de inicio.")
+    if not fecha_fin:
+        errs.append("Indica la fecha de fin.")
+    if fecha_inicio and fecha_fin and fecha_inicio >= fecha_fin:
+        errs.append("La fecha fin debe ser posterior al inicio.")
+
+    imagen_url = (post.get("imagen_url") or "").strip() or None
+    if imagen_url and len(imagen_url) > 500:
+        errs.append("La URL de la imagen no puede superar 500 caracteres.")
+
+    dias_validos = sorted({
+        d for d in post.getlist("dias_semana")
+        if d in {"0", "1", "2", "3", "4", "5", "6"}
+    })
+    dias_csv = ",".join(dias_validos)
+
+    requiere_todos = post.get("requiere_todos_productos") == "1"
+    ids_aplicables = post.getlist("productos_aplicables")
+    if requiere_todos and len(ids_aplicables) < 2:
+        errs.append("El modo combo requiere al menos 2 productos aplicables.")
+
+    datos = {
+        "titulo": titulo,
+        "descripcion_corta": descripcion_corta,
+        "orden": orden,
+        "tipo": tipo,
+        "aplicacion": aplicacion,
+        "valor_decimal": valor_decimal,
+        "cantidad_int": cantidad_int,
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "imagen_url": imagen_url,
+        "dias_csv": dias_csv,
+        "requiere_todos": requiere_todos,
+        "ids_aplicables": ids_aplicables,
+        "ids_beneficiados": post.getlist("productos_beneficiados"),
+    }
+    return datos, errs
+
+
 @gerente_requerido
 def promociones(request):
-    if request.method == "POST":
-        titulo = request.POST.get("titulo", "").strip()
-        tipo_descuento_id = request.POST.get("tipo_descuento_id")
-        valor_descuento = request.POST.get("valor_descuento") or None
-        cantidad_minima = request.POST.get("cantidad_minima") or None
-        aplicacion = request.POST.get("aplicacion", "item")
-        fecha_inicio = request.POST.get("fecha_inicio")
-        fecha_fin = request.POST.get("fecha_fin")
+    """Lista promociones y permite crear nuevas.
 
-        if not (titulo and tipo_descuento_id and fecha_inicio and fecha_fin):
-            messages.error(request, "Faltan campos obligatorios.")
+    POST: crea una promoción con tipo de descuento, rango de fechas, días de la
+          semana habilitados y productos aplicables/beneficiados (M2M).
+    GET:  renderiza la lista con los datos necesarios para los formularios del modal.
+    """
+    if request.method == "POST":
+        datos, errs = _parse_promo_form(request.POST)
+        if errs:
+            for e in errs:
+                messages.error(request, e)
             return redirect("gerente:promociones")
 
-        tipo = get_object_or_404(TipoDescuento, pk=tipo_descuento_id)
-
-        # Convertir valores numéricos correctamente
-        valor_decimal = Decimal(valor_descuento) if valor_descuento else None
-        cantidad_int = int(cantidad_minima) if cantidad_minima else None
-
-        imagen_url_promo = request.POST.get("imagen_url", "").strip() or None
         promocion = Promocion.objects.create(
-            titulo=titulo,
-            tipo_descuento=tipo,
-            valor_descuento=valor_decimal,
-            cantidad_minima=cantidad_int,
-            aplicacion=aplicacion,
-            fecha_inicio=fecha_inicio,
-            fecha_fin=fecha_fin,
+            titulo=datos["titulo"],
+            tipo_descuento=datos["tipo"],
+            valor_descuento=datos["valor_decimal"],
+            cantidad_minima=datos["cantidad_int"],
+            aplicacion=datos["aplicacion"],
+            fecha_inicio=datos["fecha_inicio"],
+            fecha_fin=datos["fecha_fin"],
             activa=True,
-            imagen_url=imagen_url_promo,
+            imagen_url=datos["imagen_url"],
+            descripcion_corta=datos["descripcion_corta"],
+            orden=datos["orden"],
+            dias_semana=datos["dias_csv"],
+            requiere_todos_productos=datos["requiere_todos"],
         )
 
-        ids_aplicables = request.POST.getlist("productos_aplicables")
-        ids_beneficiados = request.POST.getlist("productos_beneficiados")
-        if ids_aplicables:
-            promocion.productos_aplicables.set(ids_aplicables)
-        if ids_beneficiados:
-            promocion.productos_beneficiados.set(ids_beneficiados)
+        if datos["ids_aplicables"]:
+            promocion.productos_aplicables.set(datos["ids_aplicables"])
+        if datos["ids_beneficiados"]:
+            promocion.productos_beneficiados.set(datos["ids_beneficiados"])
 
-        messages.success(request, f"Promoción '{titulo}' creada exitosamente.")
+        messages.success(request, f"Promoción '{datos['titulo']}' creada exitosamente.")
         return redirect("gerente:promociones")
 
     # GET
@@ -790,6 +1089,7 @@ def promociones(request):
 @require_POST
 @gerente_requerido
 def promocion_toggle(request, id):
+    """Activa o desactiva una promoción sin borrarla. Retorna JSON {ok, activa}."""
     promo = get_object_or_404(Promocion, pk=id)
     promo.activa = not promo.activa
     promo.save(update_fields=["activa"])
@@ -799,6 +1099,7 @@ def promocion_toggle(request, id):
 @require_POST
 @gerente_requerido
 def promocion_eliminar(request, id):
+    """Elimina permanentemente una promoción."""
     promo = get_object_or_404(Promocion, pk=id)
     promo.delete()
     return JsonResponse({"ok": True})
@@ -806,44 +1107,44 @@ def promocion_eliminar(request, id):
 
 @gerente_requerido
 def promocion_editar(request, id):
+    """Edita una promoción existente.
+
+    GET:  devuelve JSON con todos los datos de la promoción para el modal de edición.
+    POST: actualiza todos los campos incluyendo días de la semana y productos M2M.
+    """
     promo = get_object_or_404(Promocion, pk=id)
 
     if request.method == "POST":
-        titulo = request.POST.get("titulo", "").strip()
-        tipo_descuento_id = request.POST.get("tipo_descuento_id")
-        valor_descuento = request.POST.get("valor_descuento") or None
-        cantidad_minima = request.POST.get("cantidad_minima") or None
-        aplicacion = request.POST.get("aplicacion", "item")
-        fecha_inicio = request.POST.get("fecha_inicio")
-        fecha_fin = request.POST.get("fecha_fin")
-
-        if not (titulo and tipo_descuento_id and fecha_inicio and fecha_fin):
-            messages.error(request, "Faltan campos obligatorios.")
+        datos, errs = _parse_promo_form(request.POST)
+        if errs:
+            for e in errs:
+                messages.error(request, e)
             return redirect("gerente:promociones")
 
-        tipo = get_object_or_404(TipoDescuento, pk=tipo_descuento_id)
-        promo.titulo = titulo
-        promo.tipo_descuento = tipo
-        promo.valor_descuento = Decimal(valor_descuento) if valor_descuento else None
-        promo.cantidad_minima = int(cantidad_minima) if cantidad_minima else None
-        promo.aplicacion = aplicacion
-        promo.fecha_inicio = fecha_inicio
-        promo.fecha_fin = fecha_fin
-        promo.imagen_url = request.POST.get("imagen_url", "").strip() or None
+        promo.titulo            = datos["titulo"]
+        promo.tipo_descuento    = datos["tipo"]
+        promo.valor_descuento   = datos["valor_decimal"]
+        promo.cantidad_minima   = datos["cantidad_int"]
+        promo.aplicacion        = datos["aplicacion"]
+        promo.fecha_inicio      = datos["fecha_inicio"]
+        promo.fecha_fin         = datos["fecha_fin"]
+        promo.imagen_url        = datos["imagen_url"]
+        promo.descripcion_corta = datos["descripcion_corta"]
+        promo.orden             = datos["orden"]
+        promo.dias_semana       = datos["dias_csv"]
+        promo.requiere_todos_productos = datos["requiere_todos"]
         promo.save()
 
-        ids_aplicables = request.POST.getlist("productos_aplicables")
-        ids_beneficiados = request.POST.getlist("productos_beneficiados")
-        if ids_aplicables:
-            promo.productos_aplicables.set(ids_aplicables)
+        if datos["ids_aplicables"]:
+            promo.productos_aplicables.set(datos["ids_aplicables"])
         else:
             promo.productos_aplicables.clear()
-        if ids_beneficiados:
-            promo.productos_beneficiados.set(ids_beneficiados)
+        if datos["ids_beneficiados"]:
+            promo.productos_beneficiados.set(datos["ids_beneficiados"])
         else:
             promo.productos_beneficiados.clear()
 
-        messages.success(request, f"Promoción '{titulo}' actualizada.")
+        messages.success(request, f"Promoción '{datos['titulo']}' actualizada.")
         return redirect("gerente:promociones")
 
     # GET: devolver JSON con los datos de la promo para cargar en el modal
@@ -860,6 +1161,12 @@ def promocion_editar(request, id):
         "productos_beneficiados": list(promo.productos_beneficiados.values_list("id", flat=True)),
         "activa": promo.activa,
         "imagen_url": promo.imagen_url or "",
+        "descripcion_corta": promo.descripcion_corta or "",
+        "orden": promo.orden,
+        "dias_semana": (
+            [d for d in (promo.dias_semana or "").split(",") if d]
+        ),
+        "requiere_todos_productos": promo.requiere_todos_productos,
     }
     return JsonResponse(data)
 
@@ -868,6 +1175,7 @@ def promocion_editar(request, id):
 
 @gerente_requerido
 def empleados(request):
+    """Lista empleados activos e inactivos para la vista de gestión de personal."""
     activos = Empleado.objects.filter(activo=True).order_by("-pk")
     inactivos = Empleado.objects.filter(activo=False).order_by("-pk")
     return render(request, "gerente/empleados.html", {
@@ -878,6 +1186,11 @@ def empleados(request):
 @require_POST
 @gerente_requerido
 def empleados_nuevo(request):
+    """Crea un nuevo empleado con usuario y contraseña.
+
+    Solo crea si nombre, usuario y password están presentes;
+    silencia el error si faltan campos para no interrumpir flujo.
+    """
     nombre = request.POST.get("nombre", "").strip()
     usuario = request.POST.get("usuario", "").strip()
     password = request.POST.get("password", "")
@@ -903,6 +1216,7 @@ def empleado_toggle(request, id):
 @require_POST
 @gerente_requerido
 def empleado_editar(request, id):
+    """Actualiza nombre, rol y opcionalmente contraseña de un empleado."""
     emp = get_object_or_404(Empleado, pk=id)
     nombre = request.POST.get("nombre", emp.nombre).strip()
     rol = request.POST.get("rol", emp.rol)
@@ -919,6 +1233,12 @@ def empleado_editar(request, id):
 
 @gerente_requerido
 def reportes(request):
+    """Vista de reportes básica (legacy). Calcula KPIs, ventas por día y top productos.
+
+    Parámetros GET:
+        periodo: "hoy", "mes" o "semana" (default "semana").
+    Renderiza gerente/reportes.html con datos JSON para gráficas Chart.js.
+    """
     periodo = request.GET.get("periodo", "semana")
     hoy = timezone.now().date()
     if periodo == "hoy":
@@ -1042,38 +1362,11 @@ def reporte_exportar(request):
     return resp
 
 
-@gerente_requerido
-def reportes_quincenales(request):
-    """Lista los reportes quincenales generados disponibles para descarga."""
-    from pathlib import Path
-    from django.conf import settings as django_settings
-
-    media_root = Path(getattr(django_settings, "MEDIA_ROOT", "media"))
-    reportes_dir = media_root / "reportes"
-    archivos = []
-    if reportes_dir.exists():
-        for f in sorted(reportes_dir.iterdir(), reverse=True):
-            if f.suffix in (".xlsx", ".pdf") and f.name.startswith("reporte_quincenal_"):
-                archivos.append({
-                    "nombre": f.name,
-                    "url": f"/media/reportes/{f.name}",
-                    "tipo": "Excel" if f.suffix == ".xlsx" else "PDF",
-                    "icono": "bi-file-earmark-excel" if f.suffix == ".xlsx" else "bi-file-earmark-pdf",
-                    "color": "#1D6F42" if f.suffix == ".xlsx" else "#C0392B",
-                    "tamaño": f"{f.stat().st_size // 1024} KB",
-                })
-    return render(request, "gerente/reportes.html", {
-        "archivos_quincenales": archivos,
-        "vista": "quincenales",
-        "desde": timezone.now().date() - timedelta(days=30),
-        "hasta": timezone.now().date(),
-    })
-
-
 # ─── Auditoría ────────────────────────────────────────────────────────────────
 
 @gerente_requerido
 def auditoria(request):
+    """Muestra los últimos 200 registros de auditoría del sistema ordenados por fecha."""
     registros = Auditoria.objects.select_related("empleado", "mesa", "pedido").order_by("-fecha_hora")[:200]
     return render(request, "gerente/reportes.html", {
         "registros": registros, "vista": "auditoria"
@@ -1083,8 +1376,18 @@ def auditoria(request):
 # ─── Configuración ────────────────────────────────────────────────────────────
 
 @gerente_requerido
+@ensure_csrf_cookie
 def configuracion(request):
+    """Muestra y guarda la configuración global del sistema.
+
+    POST JSON o form: actualiza claves en el modelo Configuracion mediante
+        update_or_create dentro de una transacción atómica.
+        Acepta: semaforo_yellow/red, modo_mantenimiento, mensaje_mantenimiento,
+        datos del restaurante y credenciales PayPal.
+    GET: devuelve el formulario con los valores actuales de cada clave.
+    """
     if request.method == "POST":
+        from django.db import transaction
         try:
             data = json.loads(request.body)
         except (json.JSONDecodeError, Exception):
@@ -1093,23 +1396,54 @@ def configuracion(request):
         red = data.get("red")
         mantenimiento = data.get("modo_mantenimiento")
         mensaje_mant = data.get("mensaje_mantenimiento")
-        if yellow is not None:
-            Configuracion.objects.update_or_create(
-                clave="semaforo_yellow", defaults={"valor": str(yellow)}
-            )
-        if red is not None:
-            Configuracion.objects.update_or_create(
-                clave="semaforo_red", defaults={"valor": str(red)}
-            )
-        if mantenimiento is not None:
-            Configuracion.objects.update_or_create(
-                clave="modo_mantenimiento",
-                defaults={"valor": "true" if str(mantenimiento).lower() in ("true", "1", "yes") else "false"}
-            )
-        if mensaje_mant is not None:
-            Configuracion.objects.update_or_create(
-                clave="mensaje_mantenimiento", defaults={"valor": str(mensaje_mant)}
-            )
+        try:
+            with transaction.atomic():
+                if yellow is not None:
+                    Configuracion.objects.update_or_create(
+                        clave="semaforo_yellow", defaults={"valor": str(yellow)}
+                    )
+                if red is not None:
+                    Configuracion.objects.update_or_create(
+                        clave="semaforo_red", defaults={"valor": str(red)}
+                    )
+                if mantenimiento is not None:
+                    Configuracion.objects.update_or_create(
+                        clave="modo_mantenimiento",
+                        defaults={"valor": "true" if str(mantenimiento).lower() in ("true", "1", "yes") else "false"}
+                    )
+                if mensaje_mant is not None:
+                    Configuracion.objects.update_or_create(
+                        clave="mensaje_mantenimiento", defaults={"valor": str(mensaje_mant)}
+                    )
+                # 3.1: flag global de horarios de atención.
+                horarios_activos = data.get("horarios_activos")
+                if horarios_activos is not None:
+                    Configuracion.objects.update_or_create(
+                        clave="horarios_activos",
+                        defaults={"valor": "true" if str(horarios_activos).lower() in ("true", "1", "yes") else "false"},
+                    )
+                    # Invalida la caché del middleware para reflejar el cambio sin esperar 30s.
+                    try:
+                        from config.middleware import HorarioAtencionMiddleware
+                        HorarioAtencionMiddleware.invalidate()
+                    except Exception:
+                        pass
+                # Datos del restaurante (para ticket)
+                for campo in ("restaurante_nombre", "restaurante_direccion", "restaurante_telefono", "restaurante_rfc"):
+                    valor_campo = data.get(campo)
+                    if valor_campo is not None:
+                        Configuracion.objects.update_or_create(
+                            clave=campo, defaults={"valor": str(valor_campo)}
+                        )
+                # PayPal
+                for campo in ("paypal_client_id", "paypal_secret", "paypal_modo"):
+                    valor_campo = data.get(campo)
+                    if valor_campo is not None:
+                        Configuracion.objects.update_or_create(
+                            clave=campo, defaults={"valor": str(valor_campo)}
+                        )
+        except Exception as e:
+            return JsonResponse({"ok": False, "error": str(e)[:200]}, status=400)
         return JsonResponse({"ok": True})
 
     listos_count = Pedido.objects.filter(estado="listo").count()
@@ -1117,10 +1451,772 @@ def configuracion(request):
     red_cfg = Configuracion.objects.filter(clave="semaforo_red").first()
     mant_cfg = Configuracion.objects.filter(clave="modo_mantenimiento").first()
     msg_cfg = Configuracion.objects.filter(clave="mensaje_mantenimiento").first()
+
+    def _cfg(clave, default=""):
+        """Helper local: devuelve el valor de una clave de Configuracion o el default."""
+        obj = Configuracion.objects.filter(clave=clave).first()
+        return obj.valor if obj else default
+
+    # 3.1: estado del flag de horarios + lista para la tabla del panel.
+    from apps.gerente.models import HorarioAtencion
+    horarios_activos_cfg = Configuracion.objects.filter(clave="horarios_activos").first()
+    horarios = HorarioAtencion.objects.all().order_by("dia_semana", "abre")
+
     return render(request, "gerente/configuracion.html", {
         "listos_count": listos_count,
         "semaforo_yellow": int(yellow_cfg.valor) if yellow_cfg else 8,
         "semaforo_red": int(red_cfg.valor) if red_cfg else 15,
         "modo_mantenimiento": mant_cfg.valor.lower() in ("true", "1") if mant_cfg else False,
         "mensaje_mantenimiento": msg_cfg.valor if msg_cfg else "",
+        "restaurante_nombre":    _cfg("restaurante_nombre",    "Mochi Matcha"),
+        "restaurante_direccion": _cfg("restaurante_direccion"),
+        "restaurante_telefono":  _cfg("restaurante_telefono"),
+        "restaurante_rfc":       _cfg("restaurante_rfc"),
+        "paypal_client_id": _cfg("paypal_client_id"),
+        "paypal_secret":    _cfg("paypal_secret"),
+        "paypal_modo":      _cfg("paypal_modo", "sandbox"),
+        "horarios_activos": (horarios_activos_cfg.valor.lower() in ("true", "1")) if horarios_activos_cfg else False,
+        "horarios":         horarios,
+        "dias_semana_choices": HorarioAtencion.DIAS,
     })
+
+
+# ─── Horarios de atención (3.1) ──────────────────────────────────────────────
+
+@require_POST
+@gerente_requerido
+def horario_crear(request):
+    """
+    POST JSON {dia_semana, abre, cierra} → crea un HorarioAtencion.
+    Valida: día 0-6, horas con formato HH:MM, abre != cierra.
+    """
+    from apps.gerente.models import HorarioAtencion
+    from datetime import time as dtime
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "error": "JSON inválido"}, status=400)
+
+    try:
+        dia = int(data.get("dia_semana", -1))
+    except (TypeError, ValueError):
+        return JsonResponse({"ok": False, "error": "Día inválido."}, status=400)
+    if dia not in range(0, 7):
+        return JsonResponse({"ok": False, "error": "Día debe estar entre 0 (lunes) y 6 (domingo)."}, status=400)
+
+    def _parse_hora(txt):
+        try:
+            h, m = str(txt).split(":")[:2]
+            return dtime(int(h), int(m))
+        except Exception:
+            return None
+
+    abre   = _parse_hora(data.get("abre"))
+    cierra = _parse_hora(data.get("cierra"))
+    if abre is None or cierra is None:
+        return JsonResponse({"ok": False, "error": "Horas inválidas. Formato esperado HH:MM."}, status=400)
+    if abre == cierra:
+        return JsonResponse({"ok": False, "error": "Abre y cierra no pueden ser iguales."}, status=400)
+
+    h = HorarioAtencion.objects.create(dia_semana=dia, abre=abre, cierra=cierra, activo=True)
+    try:
+        from config.middleware import HorarioAtencionMiddleware
+        HorarioAtencionMiddleware.invalidate()
+    except Exception:
+        pass
+    return JsonResponse({
+        "ok": True,
+        "id": h.pk,
+        "dia_semana": h.dia_semana,
+        "dia_display": h.get_dia_semana_display(),
+        "abre": h.abre.strftime("%H:%M"),
+        "cierra": h.cierra.strftime("%H:%M"),
+        "activo": h.activo,
+    })
+
+
+@require_POST
+@gerente_requerido
+def horario_toggle(request, id):
+    """POST → invierte el flag `activo` del horario."""
+    from apps.gerente.models import HorarioAtencion
+    h = get_object_or_404(HorarioAtencion, pk=id)
+    h.activo = not h.activo
+    h.save(update_fields=["activo"])
+    try:
+        from config.middleware import HorarioAtencionMiddleware
+        HorarioAtencionMiddleware.invalidate()
+    except Exception:
+        pass
+    return JsonResponse({"ok": True, "activo": h.activo})
+
+
+@require_POST
+@gerente_requerido
+def horario_eliminar(request, id):
+    """POST → elimina el horario."""
+    from apps.gerente.models import HorarioAtencion
+    h = get_object_or_404(HorarioAtencion, pk=id)
+    h.delete()
+    try:
+        from config.middleware import HorarioAtencionMiddleware
+        HorarioAtencionMiddleware.invalidate()
+    except Exception:
+        pass
+    return JsonResponse({"ok": True})
+
+# ─── Reportes Unificados ─────────────────────────────────────────────────────
+
+@gerente_requerido
+def reportes_avanzados(request):
+    """Vista única de todos los reportes: ventas, productos, empleados, operativos, cortes."""
+    from django.db.models.functions import TruncWeek, TruncMonth
+    from django.db.models import Avg, F, ExpressionWrapper, fields as dj_fields
+
+    tipo  = request.GET.get("tipo", "corte_dia")
+    hoy   = timezone.now().date()
+    desde_str = request.GET.get("desde", str(hoy))
+    hasta_str = request.GET.get("hasta", str(hoy))
+    try:
+        desde = timezone.datetime.strptime(desde_str, "%Y-%m-%d").date()
+        hasta = timezone.datetime.strptime(hasta_str, "%Y-%m-%d").date()
+    except ValueError:
+        desde = hoy; hasta = hoy
+
+    ctx = {"tipo": tipo, "desde": desde, "hasta": hasta, "hoy": hoy}
+
+    base_qs = (
+        Pedido.objects
+        .filter(fecha_hora_ingreso__date__gte=desde, fecha_hora_ingreso__date__lte=hasta)
+        .exclude(estado="cancelado")
+    )
+
+    # ── CORTE DEL DÍA ─────────────────────────────────────────────────────────
+    if tipo == "corte_dia":
+        # Ventas por hora
+        from django.db.models.functions import ExtractHour
+        por_hora = list(
+            base_qs.annotate(hora=ExtractHour("fecha_hora_ingreso"))
+            .values("hora")
+            .annotate(
+                total=Coalesce(Sum("detalles__subtotal_calculado"), Decimal("0.00"), output_field=DecimalField()),
+                tickets=Count("id", distinct=True),
+            ).order_by("hora")
+        )
+        # Ventas por método de pago
+        from apps.pedidos.models import SolicitudPago as SP
+        por_metodo = list(
+            SP.objects.filter(
+                fecha_hora__date__gte=desde, fecha_hora__date__lte=hasta,
+                estado_solicitud__descripcion="procesada"
+            ).values("metodo_pago__descripcion")
+            .annotate(count=Count("id"), propinas=Coalesce(Sum("propina_sugerida"), Decimal("0")))
+            .order_by("-count")
+        )
+        # KPIs globales
+        agg = base_qs.aggregate(
+            total=Coalesce(Sum("detalles__subtotal_calculado"), Decimal("0.00"), output_field=DecimalField()),
+            tickets=Count("id", distinct=True),
+        )
+        propinas = SP.objects.filter(
+            fecha_hora__date__gte=desde, fecha_hora__date__lte=hasta,
+            estado_solicitud__descripcion="procesada"
+        ).aggregate(p=Coalesce(Sum("propina_sugerida"), Decimal("0")))["p"]
+        cancelados = Pedido.objects.filter(
+            fecha_hora_ingreso__date__gte=desde, fecha_hora_ingreso__date__lte=hasta,
+            estado="cancelado"
+        ).count()
+        # Top productos del día
+        top_dia = list(
+            DetallePedido.objects
+            .filter(pedido__fecha_hora_ingreso__date__gte=desde, pedido__fecha_hora_ingreso__date__lte=hasta)
+            .exclude(pedido__estado="cancelado")
+            .values("producto__nombre")
+            .annotate(cantidad=Sum("cantidad"), ingreso=Sum("subtotal_calculado"))
+            .order_by("-cantidad")[:8]
+        )
+        ctx.update({
+            "kpi_total":     agg["total"],
+            "kpi_tickets":   agg["tickets"],
+            "kpi_propinas":  propinas,
+            "kpi_cancelados": cancelados,
+            "kpi_promedio":  (agg["total"] / agg["tickets"]).quantize(Decimal("0.01")) if agg["tickets"] else Decimal("0"),
+            "por_hora":      por_hora,
+            "por_metodo":    por_metodo,
+            "top_dia":       top_dia,
+            "chart_labels":  json.dumps([f"{r['hora']:02d}:00" for r in por_hora]),
+            "chart_data":    json.dumps([float(r["total"]) for r in por_hora]),
+            "chart_tickets": json.dumps([r["tickets"] for r in por_hora]),
+        })
+
+    # ── CORTE POR MESERO ──────────────────────────────────────────────────────
+    elif tipo == "corte_mesero":
+        from apps.pedidos.models import SolicitudPago as SP
+        meseros = Empleado.objects.filter(rol__in=("mesero", "gerente", "admin"), activo=True)
+        tabla = []
+        for emp in meseros:
+            qs = base_qs.filter(empleado_entrega=emp)
+            agg = qs.aggregate(
+                ventas=Coalesce(Sum("detalles__subtotal_calculado"), Decimal("0"), output_field=DecimalField()),
+                pedidos=Count("id", distinct=True),
+            )
+            # Propinas de las solicitudes de sus sesiones
+            propinas = SP.objects.filter(
+                sesion__pedidos__empleado_entrega=emp,
+                fecha_hora__date__gte=desde, fecha_hora__date__lte=hasta,
+                estado_solicitud__descripcion="procesada",
+            ).distinct().aggregate(p=Coalesce(Sum("propina_sugerida"), Decimal("0")))["p"]
+            cancelados_emp = Pedido.objects.filter(
+                empleado_entrega=emp,
+                fecha_hora_ingreso__date__gte=desde, fecha_hora_ingreso__date__lte=hasta,
+                estado="cancelado"
+            ).count()
+            promedio = (agg["ventas"] / agg["pedidos"]).quantize(Decimal("0.01")) if agg["pedidos"] else Decimal("0")
+            tabla.append({
+                "nombre":      emp.nombre,
+                "pedidos":     agg["pedidos"],
+                "ventas":      agg["ventas"],
+                "propinas":    propinas,
+                "cancelados":  cancelados_emp,
+                "promedio":    promedio,
+            })
+        tabla.sort(key=lambda x: x["ventas"], reverse=True)
+        ctx.update({
+            "tabla":         tabla,
+            "chart_labels":  json.dumps([r["nombre"] for r in tabla]),
+            "chart_data":    json.dumps([float(r["ventas"]) for r in tabla]),
+            "chart_propinas":json.dumps([float(r["propinas"]) for r in tabla]),
+        })
+
+    # ── VENTAS POR DÍA ────────────────────────────────────────────────────────
+    elif tipo == "ventas_dia":
+        data = list(
+            base_qs.annotate(fecha=TruncDate("fecha_hora_ingreso"))
+            .values("fecha")
+            .annotate(
+                total=Coalesce(Sum("detalles__subtotal_calculado"), Decimal("0.00"), output_field=DecimalField()),
+                tickets=Count("id", distinct=True),
+            ).order_by("fecha")
+        )
+        ctx.update({
+            "chart_labels":  json.dumps([str(r["fecha"]) for r in data]),
+            "chart_data":    json.dumps([float(r["total"]) for r in data]),
+            "chart_tickets": json.dumps([r["tickets"] for r in data]),
+            "tabla": data,
+        })
+
+    # ── VENTAS POR SEMANA ─────────────────────────────────────────────────────
+    elif tipo == "ventas_semana":
+        data = list(
+            base_qs.annotate(semana=TruncWeek("fecha_hora_ingreso"))
+            .values("semana").annotate(
+                total=Coalesce(Sum("detalles__subtotal_calculado"), Decimal("0.00"), output_field=DecimalField()),
+                tickets=Count("id", distinct=True),
+            ).order_by("semana")
+        )
+        ctx.update({
+            "chart_labels":  json.dumps([str(r["semana"])[:10] if r["semana"] else "" for r in data]),
+            "chart_data":    json.dumps([float(r["total"]) for r in data]),
+            "chart_tickets": json.dumps([r["tickets"] for r in data]),
+            "tabla": data,
+        })
+
+    # ── VENTAS POR MES ────────────────────────────────────────────────────────
+    elif tipo == "ventas_mes":
+        data = list(
+            base_qs.annotate(mes=TruncMonth("fecha_hora_ingreso"))
+            .values("mes").annotate(
+                total=Coalesce(Sum("detalles__subtotal_calculado"), Decimal("0.00"), output_field=DecimalField()),
+                tickets=Count("id", distinct=True),
+            ).order_by("mes")
+        )
+        for r in data:
+            r["promedio"] = (r["total"] / r["tickets"]).quantize(Decimal("0.01")) if r["tickets"] else Decimal("0")
+        ctx.update({
+            "chart_labels":  json.dumps([str(r["mes"])[:7] if r["mes"] else "" for r in data]),
+            "chart_data":    json.dumps([float(r["total"]) for r in data]),
+            "tabla": data,
+        })
+
+    # ── MÉTODO DE PAGO ────────────────────────────────────────────────────────
+    elif tipo == "ventas_metodo":
+        from apps.pedidos.models import SolicitudPago as SP
+        data = list(
+            SP.objects.filter(
+                fecha_hora__date__gte=desde, fecha_hora__date__lte=hasta,
+                estado_solicitud__descripcion="procesada"
+            ).values("metodo_pago__descripcion")
+            .annotate(count=Count("id"), propinas=Coalesce(Sum("propina_sugerida"), Decimal("0")))
+            .order_by("-count")
+        )
+        ctx.update({
+            "chart_labels": json.dumps([r["metodo_pago__descripcion"] or "Sin método" for r in data]),
+            "chart_data":   json.dumps([r["count"] for r in data]),
+            "tabla": data,
+        })
+
+    # ── TOP PRODUCTOS MÁS VENDIDOS ────────────────────────────────────────────
+    elif tipo == "top_productos":
+        data = list(
+            DetallePedido.objects
+            .filter(pedido__fecha_hora_ingreso__date__gte=desde, pedido__fecha_hora_ingreso__date__lte=hasta)
+            .exclude(pedido__estado="cancelado")
+            .values("producto__nombre")
+            .annotate(cantidad=Sum("cantidad"), ingreso=Sum("subtotal_calculado"))
+            .order_by("-cantidad")[:15]
+        )
+        ctx.update({
+            "chart_labels":  json.dumps([r["producto__nombre"] for r in data]),
+            "chart_data":    json.dumps([r["cantidad"] for r in data]),
+            "chart_ingreso": json.dumps([float(r["ingreso"] or 0) for r in data]),
+            "tabla": data,
+        })
+
+    # ── TOP PRODUCTOS MENOS VENDIDOS ──────────────────────────────────────────
+    elif tipo == "menos_vendidos":
+        from apps.menu.models import Producto as _P
+        # Construir mapa de vendidos para lookup O(1); luego iterar el catálogo completo
+        vendidos = {
+            r["producto__nombre"]: r
+            for r in DetallePedido.objects
+            .filter(pedido__fecha_hora_ingreso__date__gte=desde, pedido__fecha_hora_ingreso__date__lte=hasta)
+            .exclude(pedido__estado="cancelado")
+            .values("producto__nombre")
+            .annotate(cantidad=Sum("cantidad"), ingreso=Sum("subtotal_calculado"))
+        }
+        data = []
+        # Incluir productos con cantidad=0 (no se vendieron nada en el período)
+        for nombre in _P.objects.filter(disponible=True).values_list("nombre", flat=True):
+            if nombre in vendidos:
+                data.append({"producto__nombre": nombre, "cantidad": vendidos[nombre]["cantidad"], "ingreso": vendidos[nombre]["ingreso"]})
+            else:
+                data.append({"producto__nombre": nombre, "cantidad": 0, "ingreso": Decimal("0")})
+        data.sort(key=lambda x: x["cantidad"])
+        data = data[:15]
+        ctx.update({
+            "chart_labels":  json.dumps([r["producto__nombre"] for r in data]),
+            "chart_data":    json.dumps([r["cantidad"] for r in data]),
+            "chart_ingreso": json.dumps([float(r["ingreso"] or 0) for r in data]),
+            "tabla": data,
+        })
+
+    # ── VENTAS POR CATEGORÍA ──────────────────────────────────────────────────
+    elif tipo == "ventas_categoria":
+        data = list(
+            DetallePedido.objects
+            .filter(pedido__fecha_hora_ingreso__date__gte=desde, pedido__fecha_hora_ingreso__date__lte=hasta)
+            .exclude(pedido__estado="cancelado")
+            .values("producto__categoria__nombre")
+            .annotate(total=Sum("subtotal_calculado"), cantidad=Sum("cantidad"))
+            .order_by("-total")
+        )
+        ctx.update({
+            "chart_labels": json.dumps([r["producto__categoria__nombre"] or "Sin categoría" for r in data]),
+            "chart_data":   json.dumps([float(r["total"] or 0) for r in data]),
+            "tabla": data,
+        })
+
+    # ── DESCUENTOS/PROMOS ─────────────────────────────────────────────────────
+    elif tipo == "descuentos_productos":
+        data = list(
+            DetallePedido.objects
+            .filter(pedido__fecha_hora_ingreso__date__gte=desde, pedido__fecha_hora_ingreso__date__lte=hasta)
+            .exclude(pedido__estado="cancelado").filter(promocion__isnull=False)
+            .values("producto__nombre", "promocion__titulo")
+            .annotate(aplicaciones=Count("id"), subtotal=Sum("subtotal_calculado"))
+            .order_by("-aplicaciones")[:20]
+        )
+        ctx["tabla"] = data
+
+    # ── COMPARATIVA EMPLEADOS ─────────────────────────────────────────────────
+    elif tipo == "comparativa_empleados":
+        meseros = Empleado.objects.filter(rol__in=("mesero", "gerente", "admin"), activo=True)
+        data = []
+        for emp in meseros:
+            agg = base_qs.filter(empleado_entrega=emp).aggregate(
+                ventas=Coalesce(Sum("detalles__subtotal_calculado"), Decimal("0"), output_field=DecimalField()),
+                pedidos=Count("id", distinct=True),
+            )
+            data.append({"nombre": emp.nombre, "pedidos": agg["pedidos"], "ventas": agg["ventas"]})
+        data.sort(key=lambda x: x["ventas"], reverse=True)
+        ctx.update({
+            "tabla":         data,
+            "chart_labels":  json.dumps([r["nombre"] for r in data]),
+            "chart_data":    json.dumps([float(r["ventas"]) for r in data]),
+            "chart_pedidos": json.dumps([r["pedidos"] for r in data]),
+        })
+
+    # ── MESAS UTILIZADAS ──────────────────────────────────────────────────────
+    elif tipo == "mesas_utilizadas":
+        data = list(
+            Pedido.objects
+            .filter(fecha_hora_ingreso__date__gte=desde, fecha_hora_ingreso__date__lte=hasta)
+            .exclude(estado="cancelado")
+            .values("sesion__mesa__numero_mesa")
+            .annotate(
+                pedidos=Count("id", distinct=True),
+                ventas=Coalesce(Sum("detalles__subtotal_calculado"), Decimal("0"), output_field=DecimalField())
+            ).order_by("-pedidos")
+        )
+        ctx.update({
+            "chart_labels": json.dumps([f"Mesa {r['sesion__mesa__numero_mesa']}" for r in data]),
+            "chart_data":   json.dumps([r["pedidos"] for r in data]),
+            "tabla": data,
+        })
+
+    # ── TIEMPO DE ATENCIÓN ────────────────────────────────────────────────────
+    elif tipo == "tiempo_atencion":
+        pedidos_con_entrega = (
+            Pedido.objects
+            .filter(fecha_hora_ingreso__date__gte=desde, fecha_hora_ingreso__date__lte=hasta,
+                    fecha_hora_entrega__isnull=False)
+            .exclude(estado="cancelado")
+            # Calcular duración como campo anotado para poder hacer Avg en BD
+            .annotate(dur=ExpressionWrapper(
+                F("fecha_hora_entrega") - F("fecha_hora_ingreso"),
+                output_field=dj_fields.DurationField()
+            ))
+        )
+        from django.db.models import Avg
+        global_avg = pedidos_con_entrega.aggregate(avg=Avg("dur"))["avg"]
+        # Convertir timedelta a minutos para presentación
+        global_min = round(global_avg.total_seconds() / 60, 1) if global_avg else 0
+        meseros_t = []
+        for emp in Empleado.objects.filter(rol__in=("mesero","gerente","admin"), activo=True):
+            qs = pedidos_con_entrega.filter(empleado_entrega=emp)
+            avg = qs.aggregate(avg=Avg("dur"))["avg"]
+            meseros_t.append({"nombre": emp.nombre, "pedidos": qs.count(), "tiempo_min": round(avg.total_seconds()/60,1) if avg else 0})
+        ctx.update({
+            "global_min":    global_min,
+            "tabla":         meseros_t,
+            "chart_labels":  json.dumps([r["nombre"] for r in meseros_t]),
+            "chart_data":    json.dumps([r["tiempo_min"] for r in meseros_t]),
+        })
+
+    # ── CANCELACIONES ─────────────────────────────────────────────────────────
+    elif tipo == "cancelaciones":
+        cancelados = (
+            Pedido.objects
+            .filter(fecha_hora_ingreso__date__gte=desde, fecha_hora_ingreso__date__lte=hasta, estado="cancelado")
+            .select_related("sesion__mesa", "empleado_entrega")
+            .order_by("-fecha_hora_ingreso")
+        )
+        por_mesero = list(
+            cancelados.values("empleado_entrega__nombre")
+            .annotate(cantidad=Count("id")).order_by("-cantidad")
+        )
+        ctx.update({"cancelados": cancelados, "por_mesero": por_mesero, "total_cancelaciones": cancelados.count()})
+
+    return render(request, "gerente/reportes_avanzados.html", ctx)
+
+
+
+@gerente_requerido
+def reportes_avanzados_exportar(request):
+    """Exporta el reporte avanzado actual a Excel.
+
+    Parámetros GET: tipo, desde (YYYY-MM-DD), hasta (YYYY-MM-DD).
+    Genera las filas según el tipo de reporte (ventas_dia, top_productos,
+    cancelaciones, etc.) y devuelve el .xlsx como descarga.
+    """
+    import io
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill
+    except ImportError:
+        from django.contrib import messages
+        messages.error(request, "openpyxl no instalado.")
+        return redirect("gerente:reportes_avanzados")
+
+    tipo = request.GET.get("tipo", "ventas_dia")
+    hoy = timezone.now().date()
+    desde_str = request.GET.get("desde", str(hoy - timedelta(days=30)))
+    hasta_str = request.GET.get("hasta", str(hoy))
+    try:
+        desde = timezone.datetime.strptime(desde_str, "%Y-%m-%d").date()
+        hasta = timezone.datetime.strptime(hasta_str, "%Y-%m-%d").date()
+    except ValueError:
+        desde = hoy - timedelta(days=30)
+        hasta = hoy
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = tipo[:31]
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(fill_type="solid", fgColor="3A5F3A")
+
+    base_pedidos = (
+        Pedido.objects
+        .filter(fecha_hora_ingreso__date__gte=desde, fecha_hora_ingreso__date__lte=hasta)
+        .exclude(estado="cancelado")
+    )
+
+    # Construir datos según tipo (similar a reportes_avanzados)
+    if tipo in ("ventas_dia", "ventas_periodo"):
+        from django.db.models.functions import TruncDate as _TD
+        rows = list(
+            base_pedidos.annotate(fecha=_TD("fecha_hora_ingreso"))
+            .values("fecha")
+            .annotate(
+                total=Coalesce(Sum("detalles__subtotal_calculado"), Decimal("0.00"), output_field=DecimalField()),
+                tickets=Count("id", distinct=True),
+            ).order_by("fecha")
+        )
+        headers = ["Fecha", "Ventas ($)", "Tickets"]
+        ws.append(headers)
+        for i, h in enumerate(headers, 1):
+            cell = ws.cell(1, i)
+            cell.font = header_font
+            cell.fill = header_fill
+        for r in rows:
+            ws.append([str(r["fecha"]), float(r["total"]), r["tickets"]])
+
+    elif tipo == "top_productos" or tipo == "menos_vendidos":
+        rows = list(
+            DetallePedido.objects
+            .filter(pedido__fecha_hora_ingreso__date__gte=desde, pedido__fecha_hora_ingreso__date__lte=hasta)
+            .exclude(pedido__estado="cancelado")
+            .values("producto__nombre")
+            .annotate(cantidad=Sum("cantidad"), ingreso=Sum("subtotal_calculado"))
+            .order_by("-cantidad" if tipo == "top_productos" else "cantidad")[:10]
+        )
+        headers = ["Producto", "Unidades vendidas", "Ingreso ($)"]
+        ws.append(headers)
+        for i, h in enumerate(headers, 1):
+            cell = ws.cell(1, i)
+            cell.font = header_font
+            cell.fill = header_fill
+        for r in rows:
+            ws.append([r["producto__nombre"], r["cantidad"], float(r["ingreso"] or 0)])
+
+    elif tipo == "cancelaciones":
+        cancelados = list(
+            Pedido.objects
+            .filter(fecha_hora_ingreso__date__gte=desde, fecha_hora_ingreso__date__lte=hasta, estado="cancelado")
+            .select_related("sesion__mesa", "empleado_entrega")
+            .order_by("-fecha_hora_ingreso")
+        )
+        headers = ["Pedido #", "Fecha", "Mesa", "Mesero", "Motivo"]
+        ws.append(headers)
+        for i, h in enumerate(headers, 1):
+            cell = ws.cell(1, i)
+            cell.font = header_font
+            cell.fill = header_fill
+        for p in cancelados:
+            ws.append([
+                p.pk,
+                str(p.fecha_hora_ingreso.date()),
+                p.sesion.mesa.numero_mesa if p.sesion and p.sesion.mesa else "",
+                p.empleado_entrega.nombre if p.empleado_entrega else "",
+                p.motivo_cancelacion,
+            ])
+    else:
+        ws.append(["Reporte", tipo, "Desde", str(desde), "Hasta", str(hasta)])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    from django.http import HttpResponse
+    filename = f"reporte_{tipo}_{desde}_{hasta}.xlsx"
+    resp = HttpResponse(buf.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
+# ─── Exportación personalizada (secciones + gráficas) ────────────────────────
+
+@gerente_requerido
+def reportes_exportar_custom(request):
+    """Exporta un reporte con secciones seleccionadas por el usuario."""
+    from apps.gerente.reports import exportar_excel_custom, exportar_pdf_custom, SECCIONES_VALIDAS
+
+    formato   = request.GET.get("formato", "excel")
+    secciones = [s for s in request.GET.getlist("secciones") if s in SECCIONES_VALIDAS]
+
+    hoy = timezone.now().date()
+    try:
+        desde = timezone.datetime.strptime(request.GET.get("desde", str(hoy)), "%Y-%m-%d").date()
+        hasta = timezone.datetime.strptime(request.GET.get("hasta", str(hoy)), "%Y-%m-%d").date()
+    except ValueError:
+        desde = hoy
+        hasta = hoy
+
+    if not secciones:
+        messages.error(request, "Selecciona al menos una sección para exportar.")
+        return redirect("gerente:reportes_avanzados")
+
+    from django.http import HttpResponse
+
+    if formato == "pdf":
+        try:
+            content = exportar_pdf_custom(desde, hasta, secciones)
+            ct      = "application/pdf"
+            ext     = "pdf"
+        except (ImportError, RuntimeError) as e:
+            messages.error(request, str(e))
+            return redirect("gerente:reportes_avanzados")
+    else:
+        try:
+            content = exportar_excel_custom(desde, hasta, secciones)
+            ct      = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ext     = "xlsx"
+        except (ImportError, RuntimeError) as e:
+            messages.error(request, str(e))
+            return redirect("gerente:reportes_avanzados")
+
+    resp = HttpResponse(content, content_type=ct)
+    resp["Content-Disposition"] = f'attachment; filename="reporte-mochi-{desde}-{hasta}.{ext}"'
+    return resp
+
+
+# ─── Upload de imágenes (drag-and-drop) ───────────────────────────────────────
+@gerente_requerido
+@require_POST
+def upload_imagen(request):
+    """
+    Recibe un archivo de imagen vía multipart/form-data y lo guarda en
+    MEDIA_ROOT/images/ con un nombre único. Devuelve la ruta relativa (p.ej.
+    /media/images/abc123.jpg) que el frontend pone en el campo imagen_url.
+    Solo guarda la RUTA en la BD, el archivo vive en el filesystem.
+    """
+    import os, uuid
+    from django.conf import settings
+
+    archivo = request.FILES.get("imagen") or request.FILES.get("file")
+    if not archivo:
+        return JsonResponse({"ok": False, "error": "No se recibió archivo."}, status=400)
+
+    # Validar tipo
+    EXT_VALIDAS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    nombre_original = archivo.name or "imagen"
+    ext = os.path.splitext(nombre_original)[1].lower()
+    if ext not in EXT_VALIDAS:
+        return JsonResponse({
+            "ok": False,
+            "error": f"Formato no permitido. Usa: {', '.join(sorted(EXT_VALIDAS))}"
+        }, status=400)
+
+    # Validar tamaño (máx 5 MB)
+    if archivo.size > 5 * 1024 * 1024:
+        return JsonResponse({"ok": False, "error": "Imagen mayor a 5 MB."}, status=400)
+
+    # Carpeta destino
+    destino_dir = os.path.join(settings.MEDIA_ROOT, "images")
+    os.makedirs(destino_dir, exist_ok=True)
+
+    # Nombre único para evitar colisiones / problemas con espacios
+    slug = uuid.uuid4().hex[:12]
+    nombre_final = f"{slug}{ext}"
+    ruta_abs = os.path.join(destino_dir, nombre_final)
+    with open(ruta_abs, "wb") as f:
+        for chunk in archivo.chunks():
+            f.write(chunk)
+
+    ruta_relativa = f"{settings.MEDIA_URL}images/{nombre_final}"
+    return JsonResponse({"ok": True, "url": ruta_relativa})
+
+
+@gerente_requerido
+@require_GET
+def listar_imagenes(request):
+    """
+    Lista imágenes en MEDIA_ROOT/images con metadatos para la galería.
+    Soporta filtros por nombre (`q`) y por fecha (`desde`, `hasta` en YYYY-MM-DD).
+    Devuelve [{nombre, url, tamano, mtime, fecha}, ...] ordenado por mtime desc.
+    """
+    import os
+    from datetime import datetime, date
+    from django.conf import settings
+
+    q     = (request.GET.get("q") or "").strip().lower()
+    desde = (request.GET.get("desde") or "").strip()
+    hasta = (request.GET.get("hasta") or "").strip()
+
+    def _parse(s):
+        try:
+            return datetime.strptime(s, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    d1 = _parse(desde)
+    d2 = _parse(hasta)
+
+    EXT_VALIDAS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    dir_imgs = os.path.join(settings.MEDIA_ROOT, "images")
+    items = []
+    if os.path.isdir(dir_imgs):
+        for fname in os.listdir(dir_imgs):
+            ext = os.path.splitext(fname)[1].lower()
+            if ext not in EXT_VALIDAS:
+                continue
+            if q and q not in fname.lower():
+                continue
+            ruta_abs = os.path.join(dir_imgs, fname)
+            try:
+                stat = os.stat(ruta_abs)
+            except OSError:
+                continue
+            fecha_archivo = date.fromtimestamp(stat.st_mtime)
+            if d1 and fecha_archivo < d1:
+                continue
+            if d2 and fecha_archivo > d2:
+                continue
+            items.append({
+                "nombre": fname,
+                "url": f"{settings.MEDIA_URL}images/{fname}",
+                "tamano": stat.st_size,
+                "mtime": stat.st_mtime,
+                "fecha": fecha_archivo.isoformat(),
+            })
+    items.sort(key=lambda x: x["mtime"], reverse=True)
+    return JsonResponse({"ok": True, "items": items})
+
+
+@gerente_requerido
+@require_POST
+def eliminar_imagen(request):
+    """
+    Elimina un archivo de MEDIA_ROOT/images. Recibe `nombre` (sólo el filename,
+    sin path). Bloquea path traversal y solo opera dentro de MEDIA_ROOT/images.
+    """
+    import os
+    from django.conf import settings
+
+    try:
+        data = json.loads(request.body or b"{}")
+    except (json.JSONDecodeError, Exception):
+        data = request.POST
+    nombre = (data.get("nombre") or "").strip()
+    if not nombre or "/" in nombre or "\\" in nombre or ".." in nombre:
+        return JsonResponse({"ok": False, "error": "Nombre inválido."}, status=400)
+
+    dir_imgs = os.path.realpath(os.path.join(settings.MEDIA_ROOT, "images"))
+    ruta_abs = os.path.realpath(os.path.join(dir_imgs, nombre))
+    if not ruta_abs.startswith(dir_imgs + os.sep):
+        return JsonResponse({"ok": False, "error": "Ruta fuera de media/images."}, status=400)
+    if not os.path.isfile(ruta_abs):
+        return JsonResponse({"ok": False, "error": "Archivo no encontrado."}, status=404)
+
+    # Advertencia si la imagen está en uso (no impedir, solo informar)
+    url_relativa = f"{settings.MEDIA_URL}images/{nombre}"
+    en_uso_prod  = Producto.objects.filter(imagen_url=url_relativa).count()
+    en_uso_promo = Promocion.objects.filter(imagen_url=url_relativa).count()
+
+    try:
+        os.remove(ruta_abs)
+    except OSError as e:
+        return JsonResponse({"ok": False, "error": f"No se pudo eliminar: {e}"}, status=500)
+
+    # Limpiar referencias en BD (dejar imagen_url vacío para que use fallback)
+    if en_uso_prod:
+        Producto.objects.filter(imagen_url=url_relativa).update(imagen_url="")
+    if en_uso_promo:
+        Promocion.objects.filter(imagen_url=url_relativa).update(imagen_url="")
+
+    return JsonResponse({
+        "ok": True,
+        "limpiados": {"productos": en_uso_prod, "promociones": en_uso_promo},
+    })
+
+
