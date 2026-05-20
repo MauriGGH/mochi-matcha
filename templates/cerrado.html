@@ -1,0 +1,43 @@
+{# ============================================================================= #}
+{# cerrado.html — Pantalla "fuera de horario de atención" (3.1).                #}
+{# Se muestra cuando `HorarioAtencionMiddleware` detecta que la hora actual    #}
+{# queda fuera de los rangos habilitados. Indica al cliente cuándo volver.    #}
+{# ============================================================================= #}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mochi Matcha — Cerrado</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #F8F5F0; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; }
+  .card { background: #fff; border-radius: 16px; padding: 3rem 2.5rem; text-align: center; max-width: 440px; box-shadow: 0 8px 32px rgba(0,0,0,.08); }
+  .emoji { font-size: 4rem; margin-bottom: 1.5rem; color: #2D6A4F; }
+  h1 { font-size: 1.5rem; font-weight: 700; color: #2D6A4F; margin-bottom: .5rem; }
+  .sub { color: #888; font-size: .85rem; margin-bottom: 1.25rem; }
+  p { color: #666; font-size: .95rem; line-height: 1.6; }
+  .horario { margin-top: 1.5rem; background: #F0FAF4; border-radius: 8px; padding: 1.1rem; color: #2D6A4F; }
+  .horario .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; opacity: .7; }
+  .horario .valor { font-size: 1.15rem; font-weight: 700; margin-top: .25rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="emoji"><i class="bi bi-moon-stars-fill"></i></div>
+  <h1>Estamos cerrados</h1>
+  <p>Mochi Matcha no está atendiendo en este momento. Te esperamos pronto.</p>
+
+  {% if proximo %}
+  <div class="horario">
+    <div class="label">Próxima apertura</div>
+    <div class="valor">
+      {{ proximo.0|date:"l d \d\e F" }}<br>
+      a las {{ proximo.0|time:"H:i" }}
+    </div>
+  </div>
+  {% endif %}
+</div>
+</body>
+</html>
