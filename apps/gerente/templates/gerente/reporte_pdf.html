@@ -1,13 +1,22 @@
 <!DOCTYPE html>
+<!-- reporte_pdf.html — Plantilla PDF básica renderizada por WeasyPrint.
+     Usa tabla para los KPIs (evita bug cairocffi/WeasyPrint 62.x con flex).
+     Secciones: KPIs del período, ventas por día, top productos, cancelaciones.
+     Variables de contexto: desde, hasta, total, tickets, ticket_promedio,
+     cancelaciones, ventas_por_dia, top_productos. -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <style>
+  /* ── Reset y tipografía base ── */
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #222; background: #fff; }
+  /* ── Área de contenido con márgenes de impresión ── */
   .page { padding: 2cm 2cm; }
+  /* ── Encabezado principal del reporte ── */
   h1 { font-size: 20px; color: #2D6A4F; margin-bottom: 4px; }
   .subtitle { font-size: 11px; color: #666; margin-bottom: 24px; }
+  /* ── Títulos de cada sección de datos ── */
   h2 { font-size: 13px; color: #2D6A4F; border-bottom: 2px solid #D8F3DC;
        padding-bottom: 4px; margin: 20px 0 10px; }
 
@@ -20,14 +29,16 @@
   .kpi-label { font-size: 9px; color: #555; text-transform: uppercase;
                letter-spacing: .06em; margin-top: 2px; }
 
-  /* Tablas de datos */
+  /* ── Tablas de datos: filas alternas y cabecera verde ── */
   table.data { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
   table.data thead th { background: #2D6A4F; color: #fff; padding: 6px 10px;
                         text-align: left; font-size: 10px; text-transform: uppercase;
                         letter-spacing: .05em; }
   table.data tbody tr:nth-child(even) { background: #F8FDF9; }
   table.data tbody td { padding: 5px 10px; border-bottom: 1px solid #E9F5EB; font-size: 10px; }
+  /* ── Alineación derecha para columnas numéricas ── */
   .text-right { text-align: right; }
+  /* ── Pie de página con fecha de generación automática ── */
   .footer { margin-top: 30px; font-size: 9px; color: #999; text-align: center;
             border-top: 1px solid #ddd; padding-top: 8px; }
 </style>
@@ -38,7 +49,7 @@
   <h1>Reporte Mochi Matcha</h1>
   <div class="subtitle">Período: {{ desde|date:"d/m/Y" }} — {{ hasta|date:"d/m/Y" }}</div>
 
-  <!-- KPIs -->
+  <!-- KPIs — cuatro métricas principales del período en tarjetas verdes -->
   <table class="kpi-table">
     <tr>
       <td>
@@ -60,7 +71,7 @@
     </tr>
   </table>
 
-  <!-- Ventas por día -->
+  <!-- Ventas por día — tabla con fecha, cantidad de pedidos y total por día -->
   <h2>Ventas por día</h2>
   <table class="data">
     <thead><tr><th>Fecha</th><th class="text-right">Pedidos</th><th class="text-right">Total</th></tr></thead>
@@ -77,7 +88,7 @@
     </tbody>
   </table>
 
-  <!-- Top productos -->
+  <!-- Top productos — ranking de productos por unidades vendidas e ingresos -->
   <h2>Productos más vendidos</h2>
   <table class="data">
     <thead><tr><th>#</th><th>Producto</th><th class="text-right">Cant.</th><th class="text-right">Ingresos</th></tr></thead>
@@ -95,6 +106,7 @@
     </tbody>
   </table>
 
+  <!-- Cancelaciones — sección opcional; solo aparece si hay pedidos cancelados en el período -->
   {% if cancelaciones %}
   <h2>Cancelaciones</h2>
   <table class="data">
