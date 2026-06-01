@@ -76,7 +76,13 @@
   {% block client_header %}
   <header class="px-3 py-3 d-flex align-items-center justify-content-between"
           style="background:var(--mm-white); border-bottom:1px solid var(--mm-border); position:sticky; top:0; z-index:50;">
-    <span class="fw-semibold" style="font-size:1rem; color:var(--mm-green); font-family:var(--font-display);"><i class="bi bi-cup-hot-fill me-1"></i>Mochi Matcha</span>
+    <div class="mm-logo mm-logo-sm light">
+      {% include 'base/_logo_mark.html' %}
+      <div class="mm-wordmark">
+        <span class="mm-word-mochi">Mochi</span>
+        <span class="mm-word-matcha">Matcha</span>
+      </div>
+    </div>
     <div class="d-flex align-items-center gap-2">
       {# Muestra el alias del cliente si hay sesión activa en la cookie #}
       {% if request.sesion_cliente %}

@@ -199,10 +199,13 @@
 
 {# ── Panel de branding (izquierda) ── #}
 <div class="login-brand">
-  <div class="brand-icon">
-    <i class="bi bi-cup-hot-fill" style="color:#fff;"></i>
+  <div class="brand-icon" style="width:80px;height:80px;">
+    <div style="width:64px;height:64px;">{% include 'base/_logo_mark.html' %}</div>
   </div>
-  <div class="brand-title">Mochi Matcha</div>
+  <div class="brand-title">
+    <span style="font-style:italic;font-weight:500;opacity:.7;font-size:1.5rem;display:block;letter-spacing:.04em;">Mochi</span>
+    <span style="letter-spacing:.12em;">MATCHA</span>
+  </div>
   <div class="brand-sub">Sistema de pedidos</div>
   <div class="brand-divider"></div>
   <div class="brand-role-pill">

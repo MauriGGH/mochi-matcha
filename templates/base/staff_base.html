@@ -36,9 +36,12 @@
 {# ── Sidebar lateral: marca, navegación por rol y pie con el usuario activo ── #}
 <aside class="staff-sidebar" id="sidebar">
   {# Logotipo de la marca en la cabecera del sidebar #}
-  <div class="sidebar-brand">
-    <span class="brand-icon"><i class="bi bi-cup-hot-fill"></i></span>
-    <span class="brand-text">Mochi Matcha</span>
+  <div class="sidebar-brand mm-logo mm-logo-sm dark">
+    {% include 'base/_logo_mark.html' %}
+    <div class="mm-wordmark">
+      <span class="mm-word-mochi">Mochi</span>
+      <span class="mm-word-matcha">Matcha</span>
+    </div>
   </div>
 
   {# Bloque de navegación: cada rol inyecta sus propios enlaces de sección #}
@@ -177,6 +180,54 @@ function mmConfirm(mensaje, labelOk = 'Confirmar') {
     // Resuelve true cuando el usuario pulsa el botón de acción principal.
     document.getElementById('_mmConfirmOk').addEventListener('click', () => { m.hide(); resolve(true); }, { once: true });
     m.show();
+  });
+}
+
+// Modal de texto: reemplaza prompt() nativo con un input estilizado
+function mmPrompt(mensaje, valorInicial = '', labelOk = 'Aceptar') {
+  return new Promise(resolve => {
+    let el = document.getElementById('_mmPromptModal');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = '_mmPromptModal';
+      el.className = 'modal fade';
+      el.setAttribute('tabindex', '-1');
+      el.innerHTML = `
+        <div class="modal-dialog modal-dialog-centered" style="max-width:420px;">
+          <div class="modal-content" style="border-radius:var(--radius-md,12px);border:none;box-shadow:0 8px 32px rgba(0,0,0,.15);">
+            <div class="modal-body p-4">
+              <h5 class="fw-bold mb-2" id="_mmPromptTitle">Ingresa un valor</h5>
+              <p id="_mmPromptMsg" class="text-muted mb-2" style="font-size:.9rem;"></p>
+              <input id="_mmPromptInput" type="text" class="form-control mb-4"
+                     style="border-radius:var(--radius-sm,8px);border:1.5px solid var(--mm-border,#ddd);" />
+              <div class="d-flex gap-2">
+                <button id="_mmPromptOk" class="btn flex-grow-1 py-2 fw-semibold"
+                  style="background:var(--mm-green,#3D6B4F);color:#fff;"></button>
+                <button class="btn flex-grow-1 py-2" data-bs-dismiss="modal"
+                  style="background:var(--mm-cream-dark,#e9e4dc);">Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      document.body.appendChild(el);
+    }
+    document.getElementById('_mmPromptMsg').textContent = mensaje;
+    const input = document.getElementById('_mmPromptInput');
+    input.value = valorInicial;
+    const m = new bootstrap.Modal(el);
+    const okOld = document.getElementById('_mmPromptOk');
+    const okNew = okOld.cloneNode(true);
+    okOld.parentNode.replaceChild(okNew, okOld);
+    okNew.textContent = labelOk;
+    el.addEventListener('hidden.bs.modal', () => resolve(null), { once: true });
+    document.getElementById('_mmPromptOk').addEventListener('click', () => {
+      const val = input.value.trim();
+      m.hide();
+      resolve(val || null);
+    }, { once: true });
+    input.onkeydown = ev => { if (ev.key === 'Enter') document.getElementById('_mmPromptOk').click(); };
+    m.show();
+    setTimeout(() => input.focus(), 300);
   });
 }
 
