@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<!-- reporte_pdf_custom.html — Plantilla PDF avanzada renderizada por WeasyPrint.
+     Genera el reporte personalizado solicitado desde el modal de exportación en
+     reportes_avanzados.html. Itera sobre `secciones_data`, lista de dicts con:
+       titulo, kpis (lista de pares lbl/val), grafica_b64 (imagen PNG en base64),
+       tabla_headers, tabla_rows y tablas_extra (subtablas adicionales).
+     Permite incluir o excluir secciones arbitrarias según la selección del gerente. -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+/* ── Configuración de página para impresión ── */
+@page {
+  size: letter;
+  margin: 1.5cm 1.8cm;
+}
+/* ── Reset global ── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 9.5px;
+  color: #333;
+  line-height: 1.4;
+}
+
+/* ── Portada: encabezado con gradiente verde y badge de número de secciones ── */
+.portada {
+  background: #2D6A4F;
+  color: #fff;
+  padding: 22px 24px;
+  border-radius: 6px;
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+.portada h1 { font-size: 20px; font-weight: 800; letter-spacing: .02em; }
+.portada p  { font-size: 11px; opacity: .82; margin-top: 4px; }
+.portada-badge {
+  background: rgba(255,255,255,.18);
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ── Sección: bloque de datos con page-break-inside:avoid para impresión limpia ── */
+.seccion { margin-bottom: 28px; page-break-inside: avoid; }
+/* ── Título de sección con fondo verde ── */
+.sec-titulo {
+  background: #2D6A4F;
+  color: #fff;
+  padding: 7px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  letter-spacing: .03em;
+}
+
+/* ── KPIs: fila de tarjetas con valor y etiqueta, escalables por flex ── */
+.kpi-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.kpi {
+  background: #D8F3DC;
+  border-radius: 5px;
+  padding: 8px 14px;
+  min-width: 90px;
+  flex: 1 1 90px;
+}
+.kpi-val { font-size: 13px; font-weight: 800; color: #2D6A4F; }
+.kpi-lbl { font-size: 7.5px; color: #555; text-transform: uppercase;
+           letter-spacing: .06em; margin-top: 2px; }
+
+/* ── Gráfica: imagen PNG base64 centrada, generada por Chart.js en el servidor ── */
+.grafica {
+  text-align: center;
+  margin: 10px 0 12px;
+}
+.grafica img { max-width: 100%; max-height: 260px; }
+
+/* ── Tablas de datos: cabecera verde, filas alternas y bordes sutiles ── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+  font-size: 8.5px;
+}
+thead th {
+  background: #2D6A4F;
+  color: #fff;
+  padding: 5px 8px;
+  text-align: left;
+  font-size: 7.5px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+tbody tr:nth-child(even) { background: #F0FFF4; }
+tbody td {
+  padding: 4px 8px;
+  border-bottom: 1px solid #E8E8E8;
+}
+.extra-titulo {
+  font-size: 9px;
+  font-weight: 700;
+  color: #2D6A4F;
+  margin: 14px 0 4px;
+  border-left: 3px solid #52B788;
+  padding-left: 6px;
+}
+
+/* ── Footer: pie de página con rango de fechas del reporte ── */
+.footer {
+  text-align: center;
+  font-size: 7.5px;
+  color: #AAA;
+  margin-top: 28px;
+  border-top: 1px solid #EEE;
+  padding-top: 8px;
+}
+</style>
+</head>
+<body>
+
+<!-- Portada: logo, título del reporte, período y badge con número de secciones incluidas -->
+<div class="portada">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" width="52" height="52" style="flex-shrink:0;">
+      <circle cx="22" cy="22" r="21" fill="#3D6B4F"/>
+      <circle cx="22" cy="22" r="20" fill="none" stroke="#C9933A" stroke-width="1.3" opacity="0.55"/>
+      <path d="M11.5 22 L15 31.5 Q15 33 22 33 Q29 33 29 31.5 L32.5 22 Z" fill="white" opacity="0.92"/>
+      <ellipse cx="22" cy="22" rx="10.5" ry="3.2" fill="rgba(255,255,255,0.45)"/>
+      <ellipse cx="22" cy="22" rx="7.5" ry="2" fill="#2A4A36"/>
+      <path d="M17.5 21.5 Q19.5 20.3 22 21.5 Q24.5 20.3 26.5 21.5" stroke="rgba(106,159,122,0.7)" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+      <g transform="translate(31,11)">
+        <ellipse cx="0" cy="-4" rx="2" ry="3.5" fill="#F5DDD5" transform="rotate(0)"/>
+        <ellipse cx="0" cy="-4" rx="2" ry="3.5" fill="#F5DDD5" transform="rotate(72)"/>
+        <ellipse cx="0" cy="-4" rx="2" ry="3.5" fill="#F5DDD5" transform="rotate(144)"/>
+        <ellipse cx="0" cy="-4" rx="2" ry="3.5" fill="#F5DDD5" transform="rotate(216)"/>
+        <ellipse cx="0" cy="-4" rx="2" ry="3.5" fill="#F5DDD5" transform="rotate(288)"/>
+        <circle cx="0" cy="0" r="2.1" fill="#C9933A"/>
+        <circle cx="0" cy="0" r="0.9" fill="rgba(255,255,255,0.75)"/>
+      </g>
+    </svg>
+    <div>
+      <div style="font-size:9px;font-style:italic;opacity:.75;letter-spacing:.04em;">Mochi</div>
+      <div style="font-size:20px;font-weight:800;letter-spacing:.1em;line-height:1;">MATCHA</div>
+      <p style="margin-top:3px;">Período: {{ desde|date:"d/m/Y" }} &ndash; {{ hasta|date:"d/m/Y" }}</p>
+    </div>
+  </div>
+  <div class="portada-badge">{{ secciones_data|length }} sección{{ secciones_data|length|pluralize:"es" }}</div>
+</div>
+
+<!-- Iteración dinámica: una sección por cada tipo de reporte seleccionado por el gerente -->
+{% for sec in secciones_data %}
+<div class="seccion">
+  <!-- Encabezado verde de la sección con su nombre descriptivo -->
+  <div class="sec-titulo">{{ sec.titulo }}</div>
+
+  <!-- KPIs: se muestran solo si la sección tiene métricas de resumen -->
+  {% if sec.kpis %}
+  <div class="kpi-row">
+    {% for lbl, val in sec.kpis %}
+    <div class="kpi">
+      <div class="kpi-val">{{ val }}</div>
+      <div class="kpi-lbl">{{ lbl }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Gráfica: imagen PNG generada en el servidor (base64) y embebida en el HTML -->
+  {% if sec.grafica_b64 %}
+  <div class="grafica">
+    <img src="data:image/png;base64,{{ sec.grafica_b64 }}" alt="Gráfica {{ sec.titulo }}">
+  </div>
+  {% endif %}
+
+  <!-- Tabla principal de la sección: encabezados y filas de datos del período -->
+  {% if sec.tabla_headers %}
+  <table>
+    <thead>
+      <tr>{% for h in sec.tabla_headers %}<th>{{ h }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for row in sec.tabla_rows %}
+      <tr>{% for val in row %}<td>{{ val }}</td>{% endfor %}</tr>
+      {% empty %}
+      <tr><td colspan="{{ sec.tabla_headers|length }}" style="text-align:center;color:#999;padding:10px;">Sin datos en el período</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- Subtablas adicionales (tablas_extra): datos complementarios de la sección -->
+  {% for extra in sec.tablas_extra %}
+  <div class="extra-titulo">{{ extra.titulo }}</div>
+  <table>
+    <thead>
+      <tr>{% for h in extra.headers %}<th>{{ h }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for row in extra.rows %}
+      <tr>{% for val in row %}<td>{{ val }}</td>{% endfor %}</tr>
+      {% empty %}
+      <tr><td colspan="{{ extra.headers|length }}" style="text-align:center;color:#999;padding:8px;">Sin datos</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+</div>
+{% endfor %}
+
+<!-- Pie de página con rango de fechas del reporte -->
+<div class="footer">
+  Generado por Mochi Matcha &mdash; {{ desde|date:"d/m/Y" }} &ndash; {{ hasta|date:"d/m/Y" }}
+</div>
+</body>
+</html>

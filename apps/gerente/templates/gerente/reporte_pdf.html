@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<!-- reporte_pdf.html — Plantilla PDF básica renderizada por WeasyPrint.
+     Usa tabla para los KPIs (evita bug cairocffi/WeasyPrint 62.x con flex).
+     Secciones: KPIs del período, ventas por día, top productos, cancelaciones.
+     Variables de contexto: desde, hasta, total, tickets, ticket_promedio,
+     cancelaciones, ventas_por_dia, top_productos. -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  /* ── Reset y tipografía base ── */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #222; background: #fff; }
+  /* ── Área de contenido con márgenes de impresión ── */
+  .page { padding: 2cm 2cm; }
+  /* ── Encabezado principal del reporte ── */
+  h1 { font-size: 20px; color: #2D6A4F; margin-bottom: 4px; }
+  .subtitle { font-size: 11px; color: #666; margin-bottom: 24px; }
+  /* ── Títulos de cada sección de datos ── */
+  h2 { font-size: 13px; color: #2D6A4F; border-bottom: 2px solid #D8F3DC;
+       padding-bottom: 4px; margin: 20px 0 10px; }
+
+  /* KPI row — tabla en lugar de flex (evita bug cairocffi/WeasyPrint 62.x) */
+  .kpi-table { width: 100%; border-collapse: separate; border-spacing: 8px 0;
+               margin-bottom: 24px; }
+  .kpi-table td { background: #D8F3DC; border-radius: 6px; padding: 10px 14px;
+                  vertical-align: top; width: 25%; }
+  .kpi-value { font-size: 17px; font-weight: 700; color: #2D6A4F; }
+  .kpi-label { font-size: 9px; color: #555; text-transform: uppercase;
+               letter-spacing: .06em; margin-top: 2px; }
+
+  /* ── Tablas de datos: filas alternas y cabecera verde ── */
+  table.data { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  table.data thead th { background: #2D6A4F; color: #fff; padding: 6px 10px;
+                        text-align: left; font-size: 10px; text-transform: uppercase;
+                        letter-spacing: .05em; }
+  table.data tbody tr:nth-child(even) { background: #F8FDF9; }
+  table.data tbody td { padding: 5px 10px; border-bottom: 1px solid #E9F5EB; font-size: 10px; }
+  /* ── Alineación derecha para columnas numéricas ── */
+  .text-right { text-align: right; }
+  /* ── Pie de página con fecha de generación automática ── */
+  .footer { margin-top: 30px; font-size: 9px; color: #999; text-align: center;
+            border-top: 1px solid #ddd; padding-top: 8px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" width="48" height="48" style="flex-shrink:0;">
+      <circle cx="22" cy="22" r="21" fill="#3D6B4F"/>
+      <circle cx="22" cy="22" r="20" fill="none" stroke="#C9933A" stroke-width="1.3" opacity="0.55"/>
+      <path d="M11.5 22 L15 31.5 Q15 33 22 33 Q29 33 29 31.5 L32.5 22 Z" fill="white" opacity="0.92"/>
+      <ellipse cx="22" cy="22" rx="10.5" ry="3.2" fill="rgba(255,255,255,0.45)"/>
+      <ellipse cx="22" cy="22" rx="7.5" ry="2" fill="#2A4A36"/>
+      <path d="M17.5 21.5 Q19.5 20.3 22 21.5 Q24.5 20.3 26.5 21.5" stroke="rgba(106,159,122,0.7)" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+      <g transform="translate(31,11)">
+        <ellipse cx="0" cy="-4" rx="2" ry="3.5" fill="#F5DDD5" transform="rotate(0)"/>
+        <ellipse cx="0" cy="-4" rx="2" ry="3.5" fill="#F5DDD5" transform="rotate(72)"/>
+        <ellipse cx="0" cy="-4" rx="2" ry="3.5" fill="#F5DDD5" transform="rotate(144)"/>
+        <ellipse cx="0" cy="-4" rx="2" ry="3.5" fill="#F5DDD5" transform="rotate(216)"/>
+        <ellipse cx="0" cy="-4" rx="2" ry="3.5" fill="#F5DDD5" transform="rotate(288)"/>
+        <circle cx="0" cy="0" r="2.1" fill="#C9933A"/>
+        <circle cx="0" cy="0" r="0.9" fill="rgba(255,255,255,0.75)"/>
+      </g>
+    </svg>
+    <div>
+      <div style="font-size:11px;font-style:italic;color:#2D6A4F;opacity:.8;letter-spacing:.04em;">Mochi</div>
+      <div style="font-size:20px;font-weight:800;color:#2D6A4F;letter-spacing:.1em;line-height:1.1;">MATCHA</div>
+    </div>
+  </div>
+  <h1 style="font-size:13px;color:#555;font-weight:600;margin-bottom:4px;">Reporte de Ventas</h1>
+  <div class="subtitle">Período: {{ desde|date:"d/m/Y" }} — {{ hasta|date:"d/m/Y" }}</div>
+
+  <!-- KPIs — cuatro métricas principales del período en tarjetas verdes -->
+  <table class="kpi-table">
+    <tr>
+      <td>
+        <div class="kpi-value">${{ total|floatformat:2 }}</div>
+        <div class="kpi-label">Ventas totales</div>
+      </td>
+      <td>
+        <div class="kpi-value">{{ tickets }}</div>
+        <div class="kpi-label">Pedidos</div>
+      </td>
+      <td>
+        <div class="kpi-value">${{ ticket_promedio|floatformat:2 }}</div>
+        <div class="kpi-label">Ticket promedio</div>
+      </td>
+      <td>
+        <div class="kpi-value">{{ cancelaciones|length }}</div>
+        <div class="kpi-label">Cancelaciones</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Ventas por día — tabla con fecha, cantidad de pedidos y total por día -->
+  <h2>Ventas por día</h2>
+  <table class="data">
+    <thead><tr><th>Fecha</th><th class="text-right">Pedidos</th><th class="text-right">Total</th></tr></thead>
+    <tbody>
+      {% for row in ventas_por_dia %}
+      <tr>
+        <td>{{ row.dia }}</td>
+        <td class="text-right">{{ row.tickets }}</td>
+        <td class="text-right">${{ row.total|floatformat:2 }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="3" style="text-align:center;color:#999;">Sin datos en el período</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Top productos — ranking de productos por unidades vendidas e ingresos -->
+  <h2>Productos más vendidos</h2>
+  <table class="data">
+    <thead><tr><th>#</th><th>Producto</th><th class="text-right">Cant.</th><th class="text-right">Ingresos</th></tr></thead>
+    <tbody>
+      {% for row in top_productos %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td>{{ row.producto__nombre }}</td>
+        <td class="text-right">{{ row.cantidad }}</td>
+        <td class="text-right">${{ row.ingreso|floatformat:2 }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" style="text-align:center;color:#999;">Sin datos</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Cancelaciones — sección opcional; solo aparece si hay pedidos cancelados en el período -->
+  {% if cancelaciones %}
+  <h2>Cancelaciones</h2>
+  <table class="data">
+    <thead><tr><th>ID</th><th>Fecha</th><th>Mesa</th><th>Cliente</th><th>Motivo</th></tr></thead>
+    <tbody>
+      {% for row in cancelaciones %}
+      <tr>
+        <td>#{{ row.id }}</td>
+        <td>{{ row.fecha_hora_ingreso|date:"d/m/Y H:i" }}</td>
+        <td>Mesa {{ row.sesion__mesa__numero_mesa }}</td>
+        <td>{{ row.sesion__alias|default:"—" }}</td>
+        <td>{{ row.motivo_cancelacion|default:"—"|truncatechars:50 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <div class="footer">Generado automáticamente por Mochi Matcha · {{ hasta|date:"d/m/Y" }}</div>
+</div>
+</body>
+</html>
