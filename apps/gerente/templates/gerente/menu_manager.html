@@ -343,7 +343,7 @@
                   onclick="editarMesa({{ mesa.id }}, {{ mesa.numero_mesa }}, {{ mesa.capacidad }}, '{{ mesa.ubicacion.id|default:'' }}')">
             <i class="bi bi-pencil" style="color:var(--mm-text-muted);font-size:1.05rem;"></i>
           </button>
-          {% if mesa.estado == 'libre' %}<form method="post" action="{% url 'gerente:mesa_eliminar' mesa.id %}" style="display:inline;" onsubmit="return confirm('¿Eliminar Mesa {{ mesa.numero_mesa }}?')">{% csrf_token %}<button type="submit" class="btn btn-link btn-sm p-1"><i class="bi bi-trash3" style="color:var(--mm-danger);"></i></button></form>{% endif %}
+          {% if mesa.estado == 'libre' %}<form id="mesa-del-{{ mesa.id }}" method="post" action="{% url 'gerente:mesa_eliminar' mesa.id %}" style="display:none;">{% csrf_token %}</form><button type="button" class="btn btn-link btn-sm p-1" onclick="eliminarMesaConfirm({{ mesa.id }}, {{ mesa.numero_mesa }})"><i class="bi bi-trash3" style="color:var(--mm-danger);"></i></button>{% endif %}
         </td>
       </tr>
       {% empty %}<tr><td colspan="6" class="text-center py-5" style="color:var(--mm-text-muted);"><div style="font-size:2rem;">🪑</div>No hay mesas configuradas.</td></tr>{% endfor %}
@@ -1258,10 +1258,13 @@ async function galSubir(fileInput) {
   });
 }
 
-// Wrapper de confirmación: delega en mmConfirm (modal personalizado) o en confirm() nativo.
+// Wrapper de confirmación: siempre usa el modal personalizado mmConfirm.
 function _confirm(msg) {
-  if (typeof mmConfirm === 'function') return mmConfirm(msg);
-  return Promise.resolve(confirm(msg));
+  return mmConfirm(msg);
+}
+async function eliminarMesaConfirm(id, numero) {
+  if (!await mmConfirm(`¿Eliminar Mesa ${numero}?`, 'Eliminar')) return;
+  document.getElementById(`mesa-del-${id}`).submit();
 }
 // Filtra la tabla de productos en cliente por nombre (data-name) y categoría (data-cat).
 function filterProducts(){const q=(document.getElementById('searchProd')?.value||'').toLowerCase(),cat=document.getElementById('filterCat')?.value||'';document.querySelectorAll('#productsTable tr').forEach(tr=>{tr.style.display=(!q||(tr.dataset.name||'').includes(q))&&(!cat||tr.dataset.cat===cat)?'':'none';});}
@@ -1788,49 +1791,45 @@ async function guardarNuevaUbicacion() {
 }
 
 // Solicita el nombre de una nueva ubicación y la crea vía API; actualiza el select.
-function abrirNuevaUbicacion(){
-  const nombre = prompt('Nombre de la nueva ubicación (ej. Terraza, Interior, Barra):');
-  if (!nombre || !nombre.trim()) return;
-  fetch('{% url "gerente:ubicacion_crear" %}', {
+async function abrirNuevaUbicacion(){
+  const nombre = await mmPrompt('Nombre de la nueva ubicación (ej. Terraza, Interior, Barra):', '', 'Crear');
+  if (!nombre) return;
+  const d = await fetch('{% url "gerente:ubicacion_crear" %}', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-    body: JSON.stringify({nombre: nombre.trim()})
-  }).then(r => r.json()).then(d => {
-    if (d.ok) {
-      const sel = document.getElementById('ubicacionSelect');
-      if (!sel.querySelector(`option[value="${d.id}"]`)) {
-        const opt = new Option(d.nombre, d.id);
-        sel.appendChild(opt);
-      }
-      sel.value = d.id;
-      showToast(d.created ? `Ubicación "${d.nombre}" creada` : `Ubicación "${d.nombre}" ya existía`, 'success');
-    } else {
-      showToast(d.error || 'Error al crear ubicación', 'error');
+    body: JSON.stringify({nombre})
+  }).then(r => r.json());
+  if (d.ok) {
+    const sel = document.getElementById('ubicacionSelect');
+    if (!sel.querySelector(`option[value="${d.id}"]`)) {
+      const opt = new Option(d.nombre, d.id);
+      sel.appendChild(opt);
     }
-  });
+    sel.value = d.id;
+    showToast(d.created ? `Ubicación "${d.nombre}" creada` : `Ubicación "${d.nombre}" ya existía`, 'success');
+  } else {
+    showToast(d.error || 'Error al crear ubicación', 'error');
+  }
 }
 
 // Permite renombrar una ubicación; actualiza el chip y el select sin recargar.
-function editarUbicacion(id, nombreActual) {
-  const nuevoNombre = prompt(`Nuevo nombre para "${nombreActual}":`, nombreActual);
-  if (!nuevoNombre || !nuevoNombre.trim() || nuevoNombre.trim() === nombreActual) return;
-  fetch(`/gerente/mesas/ubicacion/${id}/editar/`, {
+async function editarUbicacion(id, nombreActual) {
+  const nuevoNombre = await mmPrompt(`Nuevo nombre para "${nombreActual}":`, nombreActual, 'Renombrar');
+  if (!nuevoNombre || nuevoNombre === nombreActual) return;
+  const d = await fetch(`/gerente/mesas/ubicacion/${id}/editar/`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-    body: JSON.stringify({nombre: nuevoNombre.trim()})
-  }).then(r => r.json()).then(d => {
-    if (d.ok) {
-      // Actualizar chip en lista
-      const chip = document.querySelector(`[data-ub-id="${id}"] .ub-nombre`);
-      if (chip) chip.textContent = d.nombre;
-      // Actualizar opción en select
-      const opt = document.querySelector(`#ubicacionSelect option[value="${id}"]`);
-      if (opt) opt.textContent = d.nombre;
-      showToast(`Ubicación renombrada a "${d.nombre}"`, 'success');
-    } else {
-      showToast(d.error || 'Error al editar ubicación', 'error');
-    }
-  });
+    body: JSON.stringify({nombre: nuevoNombre})
+  }).then(r => r.json());
+  if (d.ok) {
+    const chip = document.querySelector(`[data-ub-id="${id}"] .ub-nombre`);
+    if (chip) chip.textContent = d.nombre;
+    const opt = document.querySelector(`#ubicacionSelect option[value="${id}"]`);
+    if (opt) opt.textContent = d.nombre;
+    showToast(`Ubicación renombrada a "${d.nombre}"`, 'success');
+  } else {
+    showToast(d.error || 'Error al editar ubicación', 'error');
+  }
 }
 
 // Elimina una ubicación solo si no tiene mesas asignadas; remueve el chip y la opción del select.

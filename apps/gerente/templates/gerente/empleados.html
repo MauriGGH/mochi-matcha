@@ -199,7 +199,7 @@ function openEditEmpleado(id, nombre, usuario, rol) {
 //   recarga la página si la operación es exitosa
 async function toggleEmpleado(id, activo) {
   const accion = activo ? 'desactivar' : 'reactivar';
-  if (!confirm(`¿${accion.charAt(0).toUpperCase() + accion.slice(1)} este empleado?`)) return;
+  if (!await mmConfirm(`¿${accion.charAt(0).toUpperCase() + accion.slice(1)} este empleado?`, accion.charAt(0).toUpperCase() + accion.slice(1))) return;
   const res = await fetch(`{% url "gerente:empleado_toggle" 0 %}`.replace('/0/', `/${id}/`), {
     method: 'POST', headers: { 'X-CSRFToken': CSRF }
   });

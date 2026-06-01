@@ -65,6 +65,66 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ---- Logo / Marca ---- */
+/* Contenedor flexible: ícono SVG + wordmark de dos líneas */
+.mm-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: .6rem;
+}
+.mm-logo svg { flex-shrink: 0; display: block; }
+
+/* Tamaños del ícono SVG */
+.mm-logo-sm svg { width: 28px; height: 28px; }
+.mm-logo-md svg { width: 38px; height: 38px; }
+.mm-logo-lg svg { width: 72px; height: 72px; }
+.mm-logo-xl svg { width: 96px; height: 96px; }
+
+/* Variante apilada: ícono arriba + texto centrado abajo */
+.mm-logo-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .4rem;
+}
+
+/* Wordmark — dos líneas estilizadas */
+.mm-wordmark {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.mm-word-mochi {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: .04em;
+}
+.mm-word-matcha {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+/* Tamaños del wordmark según contexto */
+.mm-logo-sm .mm-word-mochi  { font-size: .68rem; }
+.mm-logo-sm .mm-word-matcha { font-size: .88rem; }
+.mm-logo-md .mm-word-mochi  { font-size: .8rem; }
+.mm-logo-md .mm-word-matcha { font-size: 1.05rem; }
+.mm-logo-lg .mm-word-mochi  { font-size: 1.1rem; }
+.mm-logo-lg .mm-word-matcha { font-size: 1.5rem; }
+
+/* Paleta oscura (sidebar, ticket, login panel) */
+.mm-logo.dark .mm-word-mochi  { color: rgba(255,255,255,.6); }
+.mm-logo.dark .mm-word-matcha { color: #fff; }
+.mm-logo-stack.dark .mm-word-mochi  { color: rgba(255,255,255,.6); }
+.mm-logo-stack.dark .mm-word-matcha { color: #fff; }
+
+/* Paleta clara (header cliente, reportes) */
+.mm-logo.light .mm-word-mochi  { color: var(--mm-gold); }
+.mm-logo.light .mm-word-matcha { color: var(--mm-green); }
+
 /* ---- Bootstrap overrides — sobreescrituras de componentes Bootstrap con la paleta de marca ---- */
 .btn-primary {
   background: var(--mm-green);

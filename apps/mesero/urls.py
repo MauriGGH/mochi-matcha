@@ -40,6 +40,7 @@ urlpatterns = [
 
     # ── Pedidos ───────────────────────────────────────────────────────────────
     path('pedidos-listos/',               views.pedidos_listos,            name='pedidos_listos'),
+    path('pedidos-listos/json/',          views.pedidos_listos_json,       name='pedidos_listos_json'),
     path('pedidos/entregar/',             views.entregar_pedido,           name='entregar_pedido'),
     path('pedidos/cancelar/',             views.cancelar_pedido,           name='cancelar_pedido'),
     # Solo pedidos en estado 'recibido' pueden editarse (GET → datos, POST → cambios)
@@ -57,6 +58,7 @@ urlpatterns = [
     # ── Alertas y cuentas ─────────────────────────────────────────────────────
     path('alertas/',                      views.alertas,                   name='alertas'),
     path('alertas/atender/',              views.atender_alerta,            name='atender_alerta'),
+    path('alertas/limpiar/',              views.limpiar_notificaciones,    name='limpiar_notificaciones'),
     # /cuentas/ es alias semántico de /alertas/ enfocado en solicitudes de cobro
     path('cuentas/',                      views.cuentas,                   name='cuentas'),
     path('cuentas/solicitar/',            views.solicitar_cuenta_mesero,   name='solicitar_cuenta_mesero'),

@@ -39,21 +39,14 @@
   .staff-sidebar.open { transform: translateX(0); }
 }
 
-/* Cabecera del sidebar: logotipo con ícono y nombre de la marca */
+/* Cabecera del sidebar: logotipo SVG + wordmark de dos líneas */
 .sidebar-brand {
   padding: 1.25rem 1rem 1rem;
   display: flex;
   align-items: center;
   gap: .6rem;
   border-bottom: 1px solid rgba(255,255,255,.1);
-}
-.brand-icon { font-size: 1.5rem; }
-.brand-text {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: .95rem;
-  color: #fff;
-  letter-spacing: .01em;
+  text-decoration: none;
 }
 
 /* Área de navegación del sidebar: scrolleable para roles con muchas opciones */
@@ -190,6 +183,7 @@
 .mesa-tile.libre     .mesa-num { color: var(--mm-text-muted); }
 .mesa-tile.ocupada   .mesa-num { color: var(--mm-green-dark); }
 .mesa-tile.pagando   .mesa-num { color: var(--mm-gold); }
+.mesa-tile.pedidos   .mesa-num { color: var(--mm-info); }
 .mesa-tile.alerta    .mesa-num { color: var(--mm-danger); }
 
 .mesa-label {
@@ -200,6 +194,7 @@
 .mesa-tile.libre    .mesa-label { color: var(--mm-text-muted); }
 .mesa-tile.ocupada  .mesa-label { color: var(--mm-green); }
 .mesa-tile.pagando  .mesa-label { color: var(--mm-gold); }
+.mesa-tile.pedidos  .mesa-label { color: var(--mm-info); }
 .mesa-tile.alerta   .mesa-label { color: var(--mm-danger); }
 
 /* Indicador de actividad en la esquina del tile: pulsa cuando la mesa tiene eventos */
@@ -370,3 +365,4 @@
   box-shadow: 0 2px 6px rgba(61,107,79,.15);
 }
 .legend-pill i { font-size: .65rem; }
+

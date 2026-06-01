@@ -416,10 +416,10 @@
                     <div class="col-6 col-md-4 col-lg-4">
                       <div class="product-card"
                            data-id="{{ prod.id }}"
-                           data-nombre="{{ prod.nombre|escapejs }}"
+                           data-nombre="{{ prod.nombre }}"
                            data-precio="{{ prod.precio }}"
-                           data-img="{{ prod.imagen_url|default:''|escapejs }}"
-                           data-grupos="{{ prod.grupos_json|escapejs }}"
+                           data-img="{{ prod.imagen_url|default:'' }}"
+                           data-grupos="{{ prod.grupos_json }}"
                            onclick="abrirProductoAsistido(this)">
                         {% if prod.imagen_url %}
                         <img src="{{ prod.imagen_url }}" alt="{{ prod.nombre }}" class="product-img" loading="lazy"
@@ -671,6 +671,51 @@ let asistidoPromoElegibles = []; // promos que aplican al carrito actual
 let currentProducto = null;  // producto abierto en el detalle del modal asistido
 let currentQty = 1;          // cantidad seleccionada en el detalle del modal asistido
 
+// Limpia en bulk todas las notificaciones que sea seguro descartar.
+// Resultado: toast informando cuántas se limpiaron y cuántas quedaron pendientes.
+async function limpiarNotificaciones(btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Limpiando…';
+  try {
+    const res = await fetch('{% url "mesero:limpiar_notificaciones" %}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: '{}',
+    });
+    const d = await res.json();
+    if (!d.ok) { showToast('Error al limpiar notificaciones', 'error'); return; }
+
+    const partes = [];
+    const total = d.alertas_limpiadas + d.solicitudes_limpiadas;
+    if (d.alertas_limpiadas)      partes.push(`${d.alertas_limpiadas} alerta${d.alertas_limpiadas > 1 ? 's' : ''}`);
+    if (d.solicitudes_limpiadas)  partes.push(`${d.solicitudes_limpiadas} solicitud${d.solicitudes_limpiadas > 1 ? 'es' : ''} de cobro`);
+
+    if (total > 0) {
+      let msg = `Limpiado: ${partes.join(' y ')}.`;
+      if (d.solicitudes_pendientes > 0) {
+        msg += ` ${d.solicitudes_pendientes} solicitud${d.solicitudes_pendientes > 1 ? 'es' : ''} de cobro con pago pendiente — gestiónala${d.solicitudes_pendientes > 1 ? 's' : ''} manualmente.`;
+        showToast(msg, 'warning');
+      } else {
+        showToast(msg, 'success');
+      }
+      // Recargar la página para reflejar el estado limpio
+      setTimeout(() => location.reload(), 1200);
+    } else if (d.solicitudes_pendientes > 0) {
+      showToast(`No hay nada que limpiar: ${d.solicitudes_pendientes} solicitud${d.solicitudes_pendientes > 1 ? 'es' : ''} tienen cobros activos pendientes.`, 'warning');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-trash3 me-1"></i>Limpiar todo';
+    } else {
+      showToast('Nada que limpiar', 'info');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-trash3 me-1"></i>Limpiar todo';
+    }
+  } catch(e) {
+    showToast('Error de red', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-trash3 me-1"></i>Limpiar todo';
+  }
+}
+
 // ── ALERTAS ──────────────────────────────────────────────────────────────────
 // Marca una AlertaMesero como atendida y desvanece la tarjeta del DOM.
 // Deshabilita el botón para evitar doble-click; lo reactiva si hay error.
@@ -903,7 +948,7 @@ async function entregarPedido(id, btn) {
 
 // Cierra una sesión individual de la mesa tras confirmación del usuario
 async function cerrarSesion(sid, alias) {
-  if (!confirm(`¿Cerrar sesión de ${alias}?`)) return;
+  if (!await mmConfirm(`¿Cerrar sesión de ${alias}?`, 'Cerrar sesión')) return;
   const res = await fetch('{% url "mesero:cerrar_sesion" %}', {
     method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
     body: JSON.stringify({sesion_id:sid})
@@ -913,7 +958,7 @@ async function cerrarSesion(sid, alias) {
 
 // Solicita la cuenta grupal de toda la mesa (crea SolicitudPago tipo 'grupal')
 async function solicitarCuentaMesa(mesaId) {
-  if (!confirm('¿Solicitar la cuenta para toda la mesa?')) return;
+  if (!await mmConfirm('¿Solicitar la cuenta para toda la mesa?', 'Solicitar cuenta')) return;
   const res = await fetch('{% url "mesero:solicitar_cuenta_mesero" %}', {
     method: 'POST', headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
     body: JSON.stringify({mesa_id: mesaId, tipo: 'grupal'})
@@ -925,7 +970,7 @@ async function solicitarCuentaMesa(mesaId) {
 
 // Solicita la cuenta individual de una sesión (crea SolicitudPago tipo 'individual')
 async function solicitarCuentaSesion(mesaId, sesionId) {
-  if (!confirm('¿Solicitar la cuenta individual para esta sesión?')) return;
+  if (!await mmConfirm('¿Solicitar la cuenta individual para esta sesión?', 'Solicitar cuenta')) return;
   const res = await fetch('{% url "mesero:solicitar_cuenta_mesero" %}', {
     method: 'POST', headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
     body: JSON.stringify({mesa_id: mesaId, sesion_id: sesionId, tipo: 'individual'})
@@ -937,7 +982,7 @@ async function solicitarCuentaSesion(mesaId, sesionId) {
 
 // Cierra la mesa completa (todas las sesiones activas) sin procesar cobro
 async function cerrarMesa() {
-  if (!confirm('¿Cerrar esta mesa completamente?')) return;
+  if (!await mmConfirm('¿Cerrar esta mesa completamente?', 'Cerrar mesa')) return;
   const res = await fetch('{% url "mesero:cerrar_mesa" %}', {
     method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
     body: JSON.stringify({mesa_id:currentMesaId})
@@ -1139,7 +1184,7 @@ function addToCartAsistido() {
   });
   const subtotal = (parseFloat(currentProducto.precio) + extra) * currentQty;
   asistidoCart.push({
-    producto_id: currentProducto.id,
+    producto_id: parseInt(currentProducto.id, 10),
     nombre: currentProducto.nombre,
     cantidad: currentQty,
     modificadores,
@@ -1302,6 +1347,45 @@ function abrirPago(mesaId, total, sesionId=null, metodoPref='') {
   document.getElementById('pagoMesaId').value   = mesaId;
   document.getElementById('pagoSesionId').value = sesionId || '';
   document.getElementById('pagoSubtitle').textContent = sesionId ? 'Cobro individual' : 'Toda la mesa';
+
+  // Desglose de ítems (construido desde panelData, disponible tras selectMesa)
+  (function renderItemsPago() {
+    const el = document.getElementById('pagoItemsDesglose');
+    if (!el) return;
+    const sesiones = panelData?.sesiones || [];
+    const pedidos = sesionId
+      ? sesiones.filter(s => s.id === sesionId).flatMap(s => s.pedidos)
+      : sesiones.flatMap(s => s.pedidos);
+    const items = pedidos.flatMap(p => p.items || []);
+    if (!items.length) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    let descuentoTotal = 0;
+    el.innerHTML = items.map(it => {
+      const bruto = it.subtotal_bruto ?? it.subtotal;
+      const descItem = Math.max(0, bruto - it.subtotal);
+      descuentoTotal += descItem;
+      return `<div class="px-3 py-1" style="border-bottom:1px solid var(--mm-border);">
+        <div class="d-flex justify-content-between">
+          <span>${it.cantidad}× ${it.nombre}${it.notas ? ` <small class="text-muted">(${it.notas})</small>` : ''}</span>
+          <span style="white-space:nowrap; padding-left:.5rem;">${descItem > 0.001
+            ? `<span style="text-decoration:line-through; color:var(--mm-text-muted); font-size:.78rem;">$${bruto.toFixed(2)}</span> <span style="color:var(--mm-success);">$${it.subtotal.toFixed(2)}</span>`
+            : `$${it.subtotal.toFixed(2)}`}</span>
+        </div>
+        ${it.promo_aplicada ? `<small style="color:var(--mm-success); font-size:.7rem;"><i class="bi bi-tag-fill"></i> ${it.promo_aplicada}</small>` : ''}
+      </div>`;
+    }).join('');
+    // Mostrar/ocultar fila de descuento total
+    const drow = document.getElementById('pagoDescuentoRow');
+    const ddisp = document.getElementById('pagoDescuentoDisp');
+    if (drow && ddisp) {
+      if (descuentoTotal > 0.001) {
+        ddisp.textContent = '−$' + descuentoTotal.toFixed(2);
+        drow.style.display = 'flex';
+      } else {
+        drow.style.display = 'none';
+      }
+    }
+  })();
 
   // P2: recalcular el total en vivo desde el backend. El `total` que llega por
   // parámetro viene de la SolicitudPago (puede estar desactualizado si el

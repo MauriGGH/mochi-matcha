@@ -239,7 +239,7 @@ def detalle_mesa(request, mesa_id):
     sesiones_data = []
     for s in sesiones:
         pedidos_sesion = s.pedidos.exclude(estado="cancelado").prefetch_related(
-            "detalles__producto", "detalles__modificadores__opcion"
+            "detalles__producto", "detalles__modificadores__opcion", "detalles__promocion"
         ).order_by("-fecha_hora_ingreso")
         total_sesion = sum(
             sum(d.subtotal_calculado for d in p.detalles.all()) for p in pedidos_sesion
@@ -259,8 +259,14 @@ def detalle_mesa(request, mesa_id):
                             "nombre": d.producto.nombre,
                             "cantidad": d.cantidad,
                             "subtotal": float(d.subtotal_calculado),
+                            "subtotal_bruto": float(
+                                (d.producto.precio + sum(
+                                    m.precio_extra_aplicado for m in d.modificadores.all()
+                                )) * d.cantidad
+                            ),
                             "notas": d.notas or "",
                             "modificadores": [m.opcion.nombre_opcion for m in d.modificadores.all()],
+                            "promo_aplicada": d.promocion.titulo if d.promocion else None,
                         }
                         for d in p.detalles.all()
                     ],
@@ -316,6 +322,36 @@ def detalle_mesa(request, mesa_id):
 
 
 # ─── Pedidos ──────────────────────────────────────────────────────────────────
+
+@require_GET
+@mesero_requerido
+def pedidos_listos_json(request):
+    """JSON para polling de la vista listos; devuelve pedidos estado='listo' con items."""
+    pedidos = (
+        Pedido.objects.filter(estado="listo")
+        .select_related("sesion__mesa")
+        .prefetch_related("detalles__producto")
+        .order_by("fecha_hora_ingreso")
+    )
+    data = [
+        {
+            "id": p.pk,
+            "mesa": p.sesion.mesa.numero_mesa,
+            "alias": p.sesion.alias,
+            "items": [
+                {"cantidad": d.cantidad, "nombre": d.producto.nombre, "subtotal": str(d.subtotal_calculado)}
+                for d in p.detalles.all()
+            ],
+        }
+        for p in pedidos
+    ]
+    return JsonResponse({
+        "ok": True,
+        "ts": int(timezone.now().timestamp() * 1000),
+        "pedidos": data,
+        "count": len(data),
+    })
+
 
 @mesero_requerido
 def pedidos_listos(request):
@@ -753,6 +789,22 @@ def agregar_sesion_asistida(request):
     token = str(uuid.uuid4())
 
     with transaction.atomic():
+        # Bloquear la fila de la mesa y re-leer su estado dentro de la transacción
+        # para evitar race conditions con el flujo de cierre simultáneo.
+        mesa = Mesa.objects.select_for_update().get(pk=mesa_id)
+
+        # No permitir agregar personas si la mesa está en proceso de cierre:
+        # (a) tiene sesiones pagadas pendientes de cerrar, o
+        # (b) tiene nota_cierre (pago saldado o cierre parcial en curso).
+        if mesa.estado != "libre" and (
+            bool(mesa.nota_cierre) or
+            mesa.sesiones.filter(estado="pagada").exists()
+        ):
+            return JsonResponse({
+                "ok": False,
+                "error": "La mesa está en proceso de cierre. Ciérrala primero antes de agregar nuevos comensales.",
+            }, status=409)
+
         primera_sesion = not mesa.sesiones.filter(estado="activa").exists()
         sesion = SesionCliente.objects.create(
             alias=alias,
@@ -1244,6 +1296,73 @@ def cancelar_solicitud_pago(request):
     return JsonResponse({"ok": True, "mensaje": "Solicitud cancelada correctamente."})
 
 
+@require_POST
+@mesero_requerido
+def limpiar_notificaciones(request):
+    """
+    POST — limpia en bulk las notificaciones que sea seguro descartar.
+
+    Reglas:
+      - AlertaMesero no atendidas → se marcan atendida=True (siempre seguro).
+      - SolicitudPago pendientes cuya sesión ya está pagada/cerrada, o cuya
+        mesa ya está libre → se cancelan con registro de auditoría (la solicitud
+        quedó huérfana porque el cobro ya fue procesado por otra vía).
+      - SolicitudPago pendientes con sesión todavía activa → NO se tocan;
+        se devuelve el conteo para que el mesero las gestione manualmente.
+    """
+    from apps.auditoria.models import Auditoria
+
+    with transaction.atomic():
+        # 1. Alertas de atención — marcar todas como atendidas en bulk
+        alertas_limpiadas = AlertaMesero.objects.filter(atendida=False).update(atendida=True)
+
+        # 2. Solicitudes de cobro pendientes
+        pendientes = list(
+            SolicitudPago.objects
+            .filter(estado_solicitud__descripcion="pendiente")
+            .select_related("estado_solicitud", "mesa", "sesion")
+            .select_for_update(skip_locked=True)
+        )
+
+        estado_cancelada, _ = EstadoSolicitud.objects.get_or_create(descripcion="cancelada")
+        solicitudes_limpiadas = 0
+        solicitudes_pendientes = 0
+
+        for sol in pendientes:
+            # ¿La solicitud ya está resuelta (sesión pagada/cerrada o mesa libre)?
+            sesion_resuelta = (
+                sol.sesion is None or
+                sol.sesion.estado in ("pagada", "cerrada")
+            )
+            mesa_libre = sol.mesa is None or sol.mesa.estado == "libre"
+
+            if sesion_resuelta or mesa_libre:
+                sol.estado_solicitud = estado_cancelada
+                sol.save(update_fields=["estado_solicitud"])
+                Auditoria.objects.create(
+                    accion="Solicitud de pago cancelada (limpieza)",
+                    detalle=(
+                        f"Solicitud #{sol.pk} (mesa {sol.mesa.numero_mesa if sol.mesa else 'N/A'}) "
+                        f"descartada en limpieza bulk — sesión ya {sol.sesion.estado if sol.sesion else 'sin sesión'} "
+                        f"o mesa libre. Tipo: {sol.tipo}. "
+                        f"Total: ${sol.total_mesa or sol.total_individual or 0:.2f}"
+                    ),
+                    empleado=request.user,
+                    mesa=sol.mesa,
+                    solicitud_pago=sol,
+                )
+                solicitudes_limpiadas += 1
+            else:
+                solicitudes_pendientes += 1
+
+    return JsonResponse({
+        "ok": True,
+        "alertas_limpiadas": alertas_limpiadas,
+        "solicitudes_limpiadas": solicitudes_limpiadas,
+        "solicitudes_pendientes": solicitudes_pendientes,
+    })
+
+
 # ─── Editar pedido por mesero (solo estado 'recibido') ────────────────────────
 
 @mesero_requerido
@@ -1378,7 +1497,9 @@ def _paypal_base(modo):
 
 
 def _paypal_cfg(key, default=""):
-    """Lee la clave PayPal: Configuracion en BD primero, luego settings (env)."""
+    """Lee la clave PayPal: Configuracion en BD primero, luego settings (env).
+    Permite que el gerente edite credenciales desde el panel sin redeploy.
+    """
     from django.conf import settings
     from apps.gerente.models import Configuracion
     obj = Configuracion.objects.filter(clave=key).first()
